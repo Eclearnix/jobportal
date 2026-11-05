@@ -1,122 +1,79 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import DashboardPage, { JobDetailsPage } from './pages/DashboardPage'
+import LoginPage from './pages/LoginPage'
+import OnboardingPage from './pages/OnboardingPage'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+function PageLoader() {
+  return <div className="workspace-loading" role="status"><span className="loading-spinner" />Loading your secure workspace…</div>
+}
 
+function HomeRedirect() {
+  const { user, loading } = useAuth()
+  if (loading) return <PageLoader />
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'candidate' && (!user.phone || !user.location)) return <Navigate to="/onboarding/candidate" replace />
+  if (user.role === 'recruiter' && !user.company) return <Navigate to="/onboarding/recruiter" replace />
+  return <Navigate to={user.role === 'candidate' ? '/candidate' : user.role === 'recruiter' ? '/organization' : '/super-admin'} replace />
+}
+
+function ProtectedRoute({ role, children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <PageLoader />
+  if (!user) return <Navigate to={role === 'super_admin' ? '/super-admin/login' : '/login'} replace />
+  if (user.role !== role) {
+    const destination = user.role === 'candidate' ? '/candidate' : user.role === 'recruiter' ? '/organization' : '/super-admin'
+    return <Navigate to={destination} replace />
+  }
+  if (role === 'candidate' && (!user.phone || !user.location)) return <Navigate to="/onboarding/candidate" replace />
+  if (role === 'recruiter' && !user.company) return <Navigate to="/onboarding/recruiter" replace />
+  return children
+}
+
+function LoginRoute({ superAdmin = false }) {
+  const { user, loading } = useAuth()
+  if (loading) return <PageLoader />
+  if (user) {
+    if (user.role === 'candidate' && (!user.phone || !user.location)) return <Navigate to="/onboarding/candidate" replace />
+    if (user.role === 'recruiter' && !user.company) return <Navigate to="/onboarding/recruiter" replace />
+    return <Navigate to={user.role === 'candidate' ? '/candidate' : user.role === 'recruiter' ? '/organization' : '/super-admin'} replace />
+  }
+  return <LoginPage superAdmin={superAdmin} />
+}
+
+function OnboardingRoute({ role }) {
+  const { user, loading } = useAuth()
+  if (loading) return <PageLoader />
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== role) return <HomeRedirect />
+  if (role === 'candidate' && user.phone && user.location) return <Navigate to="/candidate" replace />
+  if (role === 'recruiter' && user.company) return <Navigate to="/organization" replace />
+  return <OnboardingPage role={role} />
+}
+
+function AppRoutes() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <Routes>
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="/login" element={<LoginRoute />} />
+      <Route path="/super-admin/login" element={<LoginRoute superAdmin />} />
+      <Route path="/onboarding/candidate" element={<OnboardingRoute role="candidate" />} />
+      <Route path="/onboarding/recruiter" element={<OnboardingRoute role="recruiter" />} />
+      <Route path="/jobs/:jobId" element={<ProtectedRoute role="candidate"><JobDetailsPage /></ProtectedRoute>} />
+      <Route path="/candidate" element={<ProtectedRoute role="candidate"><DashboardPage role="candidate" /></ProtectedRoute>} />
+      <Route path="/candidate/:section" element={<ProtectedRoute role="candidate"><DashboardPage role="candidate" /></ProtectedRoute>} />
+      <Route path="/organization" element={<ProtectedRoute role="recruiter"><DashboardPage role="recruiter" /></ProtectedRoute>} />
+      <Route path="/organization/:section" element={<ProtectedRoute role="recruiter"><DashboardPage role="recruiter" /></ProtectedRoute>} />
+      <Route path="/super-admin" element={<ProtectedRoute role="super_admin"><DashboardPage role="super_admin" /></ProtectedRoute>} />
+      <Route path="/super-admin/:section" element={<ProtectedRoute role="super_admin"><DashboardPage role="super_admin" /></ProtectedRoute>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
+}
+
+function App() {
+  return <AuthProvider><BrowserRouter><AppRoutes /></BrowserRouter></AuthProvider>
 }
 
 export default App

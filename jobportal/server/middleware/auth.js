@@ -11,7 +11,7 @@ export async function requireUser(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Session is invalid or expired.' })
   }
-  const user = await User.findById(payload.sub).select('_id email name picture role status company')
+  const user = await User.findById(payload.sub).select('_id email name picture role status company phone location')
   if (!user || user.status !== 'active') return res.status(401).json({ error: 'Session is no longer active.' })
   req.user = user
   return next()

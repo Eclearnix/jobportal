@@ -321,7 +321,7 @@ router.get('/dashboard/candidate', requireUser, requireRoles('candidate'), async
   const [applicationsSent, interviews, profile, recentApplications, recommendedJobs, unreadNotifications] = await Promise.all([
     Application.countDocuments({ candidate: req.user._id, status: { $ne: 'withdrawn' } }),
     Interview.countDocuments({ candidate: req.user._id, status: 'scheduled', scheduledAt: { $gte: new Date() } }),
-    User.findById(req.user._id).select('name title location skills education experience resumeKey phone preferredLocations profileViews'),
+    User.findById(req.user._id).select('name title location skills education experience resumeKey phone preferredLocations openToOpportunities profileViews'),
     Application.find({ candidate: req.user._id }).sort({ createdAt: -1 }).limit(5).populate({ path: 'job', select: 'title location employmentType' }).populate({ path: 'company', select: 'name' }).lean(),
     Job.find({ status: 'published', ...(req.user.skills?.length ? { skills: { $in: req.user.skills } } : {}) }).sort({ publishedAt: -1 }).limit(4).populate('company', 'name location').lean(),
     Notification.countDocuments({ user: req.user._id, readAt: null }),
@@ -344,6 +344,7 @@ router.patch('/candidate/profile', requireUser, requireRoles('candidate'), async
     location: z.string().trim().max(120).optional(),
     skills: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
     preferredLocations: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
+    openToOpportunities: z.boolean().optional(),
     education: z.array(z.object({ school: z.string().max(160), degree: z.string().max(120), graduationYear: z.number().int().min(1950).max(2100).optional() })).max(20).optional(),
     experience: z.array(z.object({ title: z.string().max(120), company: z.string().max(160), summary: z.string().max(2000).optional() })).max(30).optional(),
   }).strict(), req.body)
@@ -454,16 +455,6 @@ router.get('/candidate/interviews', requireUser, requireRoles('candidate'), asyn
   res.json({ items })
 })
 
-router.get('/recruiter/candidates/:candidateId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
-  const candidateId = validate(objectId, req.params.candidateId)
-  const hasApplication = await Application.exists({ candidate: candidateId, company: req.company._id })
-  if (!hasApplication) return res.status(404).json({ error: 'Candidate not found in your organization’s applicant pool.' })
-  const candidate = await User.findOneAndUpdate({ _id: candidateId, role: 'candidate', status: 'active' }, { $inc: { profileViews: 1 } }, { new: true })
-    .select('name email picture title location skills education experience')
-  if (!candidate) return res.status(404).json({ error: 'Candidate not found.' })
-  res.json({ candidate })
-})
-
 router.get('/recruiter/candidates', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const applications = await Application.find({ company: req.company._id, status: { $ne: 'withdrawn' } })
     .sort({ createdAt: -1 })
@@ -494,6 +485,38 @@ router.get('/recruiter/candidates', requireUser, requireRoles('recruiter'), requ
   }
 
   res.json({ items: [...candidates.values()] })
+})
+
+router.get('/recruiter/discoverable-candidates', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const query = { role: 'candidate', status: 'active', openToOpportunities: true }
+  if (typeof req.query.q === 'string' && req.query.q.trim()) {
+    const search = escapeRegex(req.query.q.trim().slice(0, 80))
+    query.$or = [
+      { name: new RegExp(search, 'i') },
+      { title: new RegExp(search, 'i') },
+      { location: new RegExp(search, 'i') },
+      { skills: new RegExp(search, 'i') },
+    ]
+  }
+  const items = await User.find(query)
+    .select('name email picture title location skills preferredLocations openToOpportunities profileViews')
+    .sort({ lastLoginAt: -1, updatedAt: -1 })
+    .limit(100)
+    .lean()
+  res.json({ items })
+})
+
+router.get('/recruiter/candidates/:candidateId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const candidateId = validate(objectId, req.params.candidateId)
+  const [hasApplication, isDiscoverable] = await Promise.all([
+    Application.exists({ candidate: candidateId, company: req.company._id }),
+    User.exists({ _id: candidateId, role: 'candidate', status: 'active', openToOpportunities: true }),
+  ])
+  if (!hasApplication && !isDiscoverable) return res.status(404).json({ error: 'Candidate is not available to your organization.' })
+  const candidate = await User.findOneAndUpdate({ _id: candidateId, role: 'candidate', status: 'active' }, { $inc: { profileViews: 1 } }, { new: true })
+    .select('name email picture title location skills education experience')
+  if (!candidate) return res.status(404).json({ error: 'Candidate not found.' })
+  res.json({ candidate })
 })
 
 router.get('/recruiter/applications/:applicationId/resume', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {

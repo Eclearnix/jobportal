@@ -1,0 +1,43 @@
+.dark-veil-container {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050706;
+  pointer-events: none;
+}
+
+.dark-veil-container::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 28%, rgba(12, 155, 107, 0.6), transparent 34%),
+    radial-gradient(circle at 78% 72%, rgba(4, 78, 59, 0.82), transparent 38%),
+    linear-gradient(135deg, #020806, #063d2d 48%, #010403);
+  background-size: 140% 140%, 150% 150%, 100% 100%;
+  animation: dark-veil-fallback 12s ease-in-out infinite alternate;
+}
+
+.dark-veil-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+@keyframes dark-veil-fallback {
+  0% {
+    background-position: 0% 20%, 100% 80%, 0% 0%;
+  }
+
+  100% {
+    background-position: 100% 80%, 0% 20%, 100% 100%;
+  }
+}

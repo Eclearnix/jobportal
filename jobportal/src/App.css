@@ -1714,7 +1714,9 @@ button {
   display: flex;
   justify-content: center;
   width: min(360px, 100%);
-  min-height: 42px;
+  height: 48px;
+  min-height: 48px;
+  margin: 0 auto;
   --google-light-x: 50%;
   --google-light-y: 50%;
   isolation: isolate;
@@ -1757,11 +1759,16 @@ button {
   z-index: 2;
   display: flex;
   justify-content: center;
+  align-items: center;
   width: 100%;
-  min-height: 42px;
+  height: 48px;
+  min-height: 48px;
 }
 
 .google-signin iframe {
+  display: block;
+  width: 100% !important;
+  height: 48px !important;
   max-width: 100%;
 }
 

@@ -43,6 +43,7 @@ export default function LoginPage({ superAdmin = false }) {
   return (
     <main className="login-page">
       <DarkVeil
+        color="#111111"
         speed={1.35}
         scale={0.75}
         flow={1.6}

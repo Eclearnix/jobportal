@@ -1685,6 +1685,19 @@ button {
   text-decoration: none;
 }
 
+.login-page .brand-wordmark span,
+.login-page .welcome-kicker,
+.login-page .login-eyebrow,
+.login-page .login-panel-top a,
+.login-page .super-admin-link a {
+  color: #ffffff;
+}
+
+.login-page .welcome-dot {
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+}
+
 .admin-note {
   align-items: center;
 }

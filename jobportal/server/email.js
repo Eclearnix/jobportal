@@ -1,3 +1,5 @@
+import nodemailer from 'nodemailer'
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     '&': '&amp;',
@@ -17,12 +19,12 @@ function getHttpUrl(value) {
   }
 }
 
-export async function sendInterviewEmail({ to, candidateName, companyName, jobTitle, scheduledAt, durationMinutes, meetingUrl, notes }) {
-  const { RESEND_API_KEY, RESEND_FROM_EMAIL } = process.env
-  if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) {
+export async function sendInterviewEmail({ to, replyTo, candidateName, companyName, jobTitle, scheduledAt, durationMinutes, meetingUrl, notes }) {
+  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) {
     return {
       sent: false,
-      error: 'Email is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL in the server .env.',
+      error: 'Email is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM in the server .env.',
     }
   }
 
@@ -46,31 +48,27 @@ export async function sendInterviewEmail({ to, candidateName, companyName, jobTi
     ${safeMeetingUrl ? `<p><strong>Meeting link:</strong> <a href="${escapeHtml(safeMeetingUrl)}">${escapeHtml(safeMeetingUrl)}</a></p>` : ''}
     ${notes ? `<p><strong>Notes:</strong><br>${escapeHtml(notes).replace(/\n/g, '<br>')}</p>` : ''}`
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT || 587),
+    secure: SMTP_SECURE === 'true',
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASSWORD,
     },
-    body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: [to], subject, text, html }),
-    signal: AbortSignal.timeout(10000),
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   })
 
-  if (!response.ok) {
-    const body = await response.text()
-    let detail = ''
-    try {
-      detail = JSON.parse(body).message || ''
-    } catch {
-      detail = body.slice(0, 300)
-    }
-    return {
-      sent: false,
-      error: detail
-        ? `Resend could not send the email: ${detail}`
-        : `Resend could not send the email (HTTP ${response.status}).`,
-    }
-  }
+  await transporter.sendMail({
+    from: `"${companyName} HR via Eclearnix Jobs" <${SMTP_FROM || SMTP_USER}>`,
+    to,
+    replyTo: replyTo || undefined,
+    subject,
+    text,
+    html,
+  })
 
   return { sent: true }
 }

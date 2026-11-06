@@ -1800,6 +1800,27 @@ button {
   font-weight: 400;
 }
 
+.module-form .checkbox-field {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.module-form .checkbox-field input {
+  width: 16px;
+  min-height: 16px;
+  margin-top: 2px;
+  padding: 0;
+  appearance: auto;
+  accent-color: #07875f;
+}
+
+.module-form .checkbox-field span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .onboarding-form input,
 .onboarding-form select,
 .onboarding-form textarea,

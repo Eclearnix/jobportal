@@ -16,7 +16,7 @@ const navigation = {
   ],
   recruiter: [
     ['Overview', LayoutDashboard], ['Post a Job', BriefcaseBusiness], ['Manage Jobs', ClipboardList],
-    ['Applications', Users], ['Candidates', UserRound], ['Company Profile', Building2],
+    ['Applications', Users], ['Candidates', UserRound], ['Discover Candidates', Search], ['Company Profile', Building2],
     ['Interviews', BriefcaseBusiness], ['Team Management', Users], ['Notifications', Bell], ['Settings', Settings],
   ],
   super_admin: [
@@ -299,6 +299,7 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
         location: form.get('location'),
         skills: String(form.get('skills') || '').split(',').map((item) => item.trim()).filter(Boolean),
         preferredLocations: String(form.get('preferredLocations') || '').split(',').map((item) => item.trim()).filter(Boolean),
+        openToOpportunities: form.get('openToOpportunities') === 'on',
       } })
       await onProfileSaved()
     } catch (saveError) {
@@ -345,6 +346,10 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
         <div className="form-two-col"><label>Phone<input name="phone" defaultValue={profile?.phone} maxLength={40} /></label><label>Location<input name="location" defaultValue={profile?.location} maxLength={120} /></label></div>
         <label>Skills<input name="skills" defaultValue={profile?.skills?.join(', ')} placeholder="Figma, Research, Prototyping" /></label>
         <label>Preferred locations<input name="preferredLocations" defaultValue={profile?.preferredLocations?.join(', ')} /></label>
+        <label className="checkbox-field">
+          <input type="checkbox" name="openToOpportunities" defaultChecked={profile?.openToOpportunities} />
+          <span><strong>Open to opportunities</strong><small>Allow verified organizations to discover your profile and contact you about relevant roles.</small></span>
+        </label>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button type="submit" className="green-button" disabled={busy}>{busy ? 'Saving…' : 'Save profile'} <ArrowRight size={14} /></button>
       </form>
@@ -511,6 +516,7 @@ function DashboardWorkspace({ role }) {
             'Manage Jobs': '/recruiter/jobs',
             Applications: '/recruiter/applications',
             Candidates: '/recruiter/candidates',
+            'Discover Candidates': '/recruiter/discoverable-candidates',
             Interviews: '/recruiter/interviews',
             'Company Profile': '/dashboard/recruiter',
             'Team Management': '/recruiter/team',
@@ -690,6 +696,12 @@ function DashboardWorkspace({ role }) {
           : <div className="application-actions"><select aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button><ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} /></div>}
       empty="No records to show yet."
     />
+  } else if (isRecruiter && activePage === 'Discover Candidates') {
+    table = <DataTable columns={['Candidate', 'Headline', 'Location', 'Skills']} rows={(viewData?.items || []).map((candidate) => ({
+      id: candidate._id,
+      cells: [candidate.name, candidate.title || '—', candidate.location || '—', candidate.skills?.join(', ') || '—'],
+      resource: candidate,
+    }))} actions={(row) => <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.id)}>View profile</button>} empty="No candidates are currently open to opportunities." />
   } else if (isRecruiter && activePage === 'Interviews') {
     table = <DataTable columns={['Candidate', 'Job', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,

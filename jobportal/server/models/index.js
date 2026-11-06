@@ -18,6 +18,7 @@ const userSchema = new Schema({
   education: [{ school: String, degree: String, graduationYear: Number }],
   experience: [{ title: String, company: String, startDate: Date, endDate: Date, summary: String }],
   preferredLocations: [{ type: String, trim: true, maxlength: 120 }],
+  openToOpportunities: { type: Boolean, default: false, index: true },
   resumeKey: { type: String, default: '' },
   lastLoginAt: { type: Date },
 }, { timestamps: true, strict: 'throw' })

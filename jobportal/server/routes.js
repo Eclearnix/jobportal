@@ -464,6 +464,38 @@ router.get('/recruiter/candidates/:candidateId', requireUser, requireRoles('recr
   res.json({ candidate })
 })
 
+router.get('/recruiter/candidates', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const applications = await Application.find({ company: req.company._id, status: { $ne: 'withdrawn' } })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .populate('candidate', 'name email picture title location skills')
+    .populate('job', 'title')
+    .lean()
+
+  const candidates = new Map()
+  for (const application of applications) {
+    if (!application.candidate) continue
+    const candidateId = String(application.candidate._id)
+    const existing = candidates.get(candidateId)
+    const applicationSummary = {
+      id: application._id,
+      jobTitle: application.job?.title || 'Untitled job',
+      status: application.status,
+      createdAt: application.createdAt,
+    }
+    if (existing) {
+      existing.applications.push(applicationSummary)
+      continue
+    }
+    candidates.set(candidateId, {
+      candidate: application.candidate,
+      applications: [applicationSummary],
+    })
+  }
+
+  res.json({ items: [...candidates.values()] })
+})
+
 router.get('/recruiter/applications/:applicationId/resume', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const id = validate(objectId, req.params.applicationId)
   const application = await Application.findOne({ _id: id, company: req.company._id }).select('resumeKey')

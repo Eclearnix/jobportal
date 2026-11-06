@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { ArrowRight, BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import GoogleSignInButton from '../components/GoogleSignInButton'
+import DarkVeil from '../components/DarkVeil'
 import { useAuth } from '../context/AuthContext'
 
 const publicRoles = [
@@ -41,6 +42,13 @@ export default function LoginPage({ superAdmin = false }) {
 
   return (
     <main className="login-page">
+      <DarkVeil
+        speed={1.35}
+        scale={0.75}
+        flow={1.6}
+        glow={0.9}
+        mouseInteraction={false}
+      />
       <aside className="welcome-panel">
         <Brand />
         <div className="welcome-content">
@@ -53,8 +61,6 @@ export default function LoginPage({ superAdmin = false }) {
           </div>
         </div>
         <div className="welcome-footer"><span>© 2026 Eclearnix Jobs</span><span>Made for better work.</span></div>
-        <div className="welcome-decoration decoration-one" />
-        <div className="welcome-decoration decoration-two" />
       </aside>
 
       <section className="login-panel">
@@ -78,7 +84,8 @@ export default function LoginPage({ superAdmin = false }) {
                   <button
                     type="button"
                     key={id}
-                    className={`role-option ${role === id ? 'role-option-active' : ''}`}
+                    className={`role-option cursor-target ${role === id ? 'role-option-active' : ''}`}
+                    data-cursor-label={name}
                     aria-pressed={role === id}
                     onClick={() => { setRole(id); setError('') }}
                   >

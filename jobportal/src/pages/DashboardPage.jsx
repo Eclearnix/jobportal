@@ -510,7 +510,7 @@ function DashboardWorkspace({ role }) {
           const endpoint = {
             'Manage Jobs': '/recruiter/jobs',
             Applications: '/recruiter/applications',
-            Candidates: '/recruiter/applications',
+            Candidates: '/recruiter/candidates',
             Interviews: '/recruiter/interviews',
             'Company Profile': '/dashboard/recruiter',
             'Team Management': '/recruiter/team',
@@ -665,17 +665,29 @@ function DashboardWorkspace({ role }) {
         cells: [job.title, humanize(job.status), job.location, dateLabel(job.createdAt)],
         resource: job,
       }))
-      : (viewData?.items || []).map((item) => ({
-        id: item._id,
-        cells: [item.candidate?.name, item.job?.title, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)],
-        resource: item,
-      }))
+      : activePage === 'Applications'
+        ? (viewData?.items || []).map((item) => ({
+          id: item._id,
+          cells: [item.candidate?.name, item.job?.title, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)],
+          resource: item,
+        }))
+        : (viewData?.items || []).map((item) => ({
+          id: item.candidate._id,
+          cells: [item.candidate.name, item.candidate.email, item.candidate.title || '—', item.applications.length],
+          resource: item,
+        }))
     table = <DataTable
-      columns={activePage === 'Manage Jobs' ? ['Job', 'Status', 'Location', 'Created'] : ['Candidate', 'Job', 'Stage', 'Received']}
+      columns={activePage === 'Manage Jobs'
+        ? ['Job', 'Status', 'Location', 'Created']
+        : activePage === 'Applications'
+          ? ['Candidate', 'Job', 'Stage', 'Received']
+          : ['Candidate', 'Email', 'Title', 'Applications']}
       rows={rows}
       actions={(row) => activePage === 'Manage Jobs'
         ? <button className="org-action-button" type="button" onClick={() => mutate(() => api(`/recruiter/jobs/${row.id}/status`, { method: 'PATCH', body: { status: row.resource.status === 'published' ? 'paused' : 'published' } }))}>{row.resource.status === 'published' ? 'Pause' : 'Publish'}</button>
-        : <div className="application-actions"><select aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button><ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} /></div>}
+        : activePage === 'Candidates'
+          ? <div className="application-actions"><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate._id)}>View profile</button>{row.resource.applications[0] && <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.resource.applications[0].id)}>Resume</button>}</div>
+          : <div className="application-actions"><select aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button><ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} /></div>}
       empty="No records to show yet."
     />
   } else if (isRecruiter && activePage === 'Interviews') {

@@ -15,12 +15,35 @@ Super Admin sign-in is separate at `/super-admin/login`. Public sign-in endpoint
 1. Install Node.js 20.19+ and MongoDB Atlas (or a local MongoDB replica set).
 2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a random `JWT_SECRET` of at least 32 characters, `GOOGLE_CLIENT_ID`, and `VITE_GOOGLE_CLIENT_ID`. `CLIENT_ORIGIN` accepts a comma-separated allowlist; the Google client ID must match the OAuth web client configured for the local origin.
 3. Resume uploads are stored in the MongoDB database configured by `MONGODB_URI`; no separate file-storage account is required. GridFS stores resume files in the `resumes.files` and `resumes.chunks` collections.
-4. To email candidates about scheduled interviews, configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in the server `.env`. The sender address must be allowed by your Resend account (verify your sending domain for general delivery). Without these settings, interview scheduling and in-app notifications still work, and the recruiter sees an explicit email delivery warning.
+4. To email candidates about scheduled interviews, configure Gmail SMTP in the server `.env` with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. `SMTP_PASSWORD` must be a Google App Password for the Gmail account, not the normal account password. Without these settings, interview scheduling and in-app notifications still work, and the recruiter sees an explicit email delivery warning.
 5. Install packages with `npm install`.
 6. Start the API with `npm run server`.
 7. In another terminal, start Vite with `npm run dev`.
 
 Vite proxies `/api` requests to `http://localhost:4000`. The API refuses to start without its MongoDB URI and signing secret. Google sign-in reports explicit configuration errors until its provider settings are supplied. This app verifies Google Identity Services ID tokens, so it needs the OAuth client ID in both Google ID variables but does not use a Google client secret.
+
+### Vercel deployment
+
+Set the Vercel project root to `jobportal` (the folder containing `package.json`). The included `vercel.json` builds the Vite frontend, and `api/[...path].js` exposes the Express API under `/api`.
+
+Add these environment variables in Vercel for Production, Preview, and Development as appropriate:
+
+```text
+VITE_GOOGLE_CLIENT_ID
+MONGODB_URI
+JWT_SECRET
+GOOGLE_CLIENT_ID
+CLIENT_ORIGIN
+TRUST_PROXY=true
+SMTP_HOST
+SMTP_PORT
+SMTP_SECURE
+SMTP_USER
+SMTP_PASSWORD
+SMTP_FROM
+```
+
+Set `CLIENT_ORIGIN` to the exact deployed frontend origin, such as `https://your-project.vercel.app`. Add each Vercel preview domain that needs access as a comma-separated origin. Do not expose server variables with a `VITE_` prefix.
 
 ### Provisioning the first Super Admin
 

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { ArrowRight, BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import GoogleSignInButton from '../components/GoogleSignInButton'
-import DarkVeil from '../components/DarkVeil'
+import Aurora from '../components/Aurora'
 import { useAuth } from '../context/AuthContext'
 
 const publicRoles = [
@@ -42,12 +42,13 @@ export default function LoginPage({ superAdmin = false }) {
 
   return (
     <main className="login-page">
-      <DarkVeil
-        color="#111111"
-        speed={1.35}
-        scale={0.75}
-        flow={1.6}
-        glow={0.9}
+      <Aurora
+        colorStops={['#94a3b8', '#94a3b8', '#ffffff']}
+        amplitude={1}
+        blend={0.5}
+        height={0.45}
+        speed={1}
+        glow={0.6}
         mouseInteraction={false}
       />
       <aside className="welcome-panel">

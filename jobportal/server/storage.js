@@ -1,38 +1,47 @@
-import { randomUUID } from 'node:crypto'
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import mongoose from 'mongoose'
 
-function getStorageClient() {
-  const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = process.env
-  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET) {
-    const error = new Error('Private file storage is not configured.')
-    error.status = 503
-    throw error
-  }
-  const client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
-  })
-  return { client, bucket: R2_BUCKET }
+const bucketName = 'resumes'
+
+function getBucket() {
+  if (!mongoose.connection.db) throw new Error('MongoDB is not connected.')
+  return new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName })
 }
 
 export async function savePrivateFile(file, prefix) {
-  const { client, bucket } = getStorageClient()
-  const extension = file.mimetype === 'application/pdf' ? '.pdf' : '.docx'
-  const key = `${prefix}/${randomUUID()}${extension}`
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    Body: file.buffer,
-    ContentLength: file.size,
-    ContentType: file.mimetype,
-    Metadata: { originalname: encodeURIComponent(file.originalname.slice(0, 180)) },
-  }))
-  return key
+  const bucket = getBucket()
+  const upload = bucket.openUploadStream(file.originalname, {
+    metadata: {
+      contentType: file.mimetype,
+      prefix,
+    },
+  })
+
+  await pipeline(Readable.from([file.buffer]), upload)
+  return upload.id.toString()
 }
 
-export async function getPrivateFileUrl(key) {
-  const { client, bucket } = getStorageClient()
-  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: 60 })
+export async function streamPrivateFile(key, res) {
+  if (!mongoose.mongo.ObjectId.isValid(key)) {
+    const error = new Error('Resume file not found.')
+    error.status = 404
+    throw error
+  }
+
+  const db = mongoose.connection.db
+  if (!db) throw new Error('MongoDB is not connected.')
+  const id = new mongoose.mongo.ObjectId(key)
+  const file = await db.collection(`${bucketName}.files`).findOne({ _id: id })
+  if (!file) {
+    const error = new Error('Resume file not found.')
+    error.status = 404
+    throw error
+  }
+
+  res.setHeader('Content-Type', file.metadata?.contentType || 'application/octet-stream')
+  res.setHeader('Content-Disposition', 'inline')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  if (Number.isSafeInteger(file.length)) res.setHeader('Content-Length', file.length)
+  await pipeline(getBucket().openDownloadStream(id), res)
 }

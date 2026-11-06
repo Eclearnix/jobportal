@@ -19,7 +19,8 @@ import {
   User,
 } from './models/index.js'
 import { requireCompanyMember, requireRoles, requireUser } from './middleware/auth.js'
-import { getPrivateFileUrl, savePrivateFile } from './storage.js'
+import { savePrivateFile, streamPrivateFile } from './storage.js'
+import { sendInterviewEmail } from './email.js'
 
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
@@ -361,7 +362,13 @@ router.post('/candidate/resume', requireUser, requireRoles('candidate'), upload.
 router.get('/candidate/resume', requireUser, requireRoles('candidate'), async (req, res) => {
   const user = await User.findById(req.user._id).select('resumeKey')
   if (!user.resumeKey) return res.status(404).json({ error: 'No resume has been uploaded.' })
-  res.json({ url: await getPrivateFileUrl(user.resumeKey) })
+  res.json({ url: '/api/candidate/resume/file' })
+})
+
+router.get('/candidate/resume/file', requireUser, requireRoles('candidate'), async (req, res) => {
+  const user = await User.findById(req.user._id).select('resumeKey')
+  if (!user.resumeKey) return res.status(404).json({ error: 'No resume has been uploaded.' })
+  await streamPrivateFile(user.resumeKey, res)
 })
 
 router.get('/candidate/applications', requireUser, requireRoles('candidate'), async (req, res) => {
@@ -461,7 +468,14 @@ router.get('/recruiter/applications/:applicationId/resume', requireUser, require
   const id = validate(objectId, req.params.applicationId)
   const application = await Application.findOne({ _id: id, company: req.company._id }).select('resumeKey')
   if (!application) return res.status(404).json({ error: 'Application not found.' })
-  res.json({ url: await getPrivateFileUrl(application.resumeKey) })
+  res.json({ url: `/api/recruiter/applications/${id}/resume/file` })
+})
+
+router.get('/recruiter/applications/:applicationId/resume/file', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const id = validate(objectId, req.params.applicationId)
+  const application = await Application.findOne({ _id: id, company: req.company._id }).select('resumeKey')
+  if (!application) return res.status(404).json({ error: 'Application not found.' })
+  await streamPrivateFile(application.resumeKey, res)
 })
 
 router.get('/recruiter/interviews', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -600,12 +614,31 @@ router.post('/recruiter/applications/:applicationId/interviews', requireUser, re
     notes: z.string().max(2000).optional().default(''),
   }), req.body)
   const application = await Application.findOne({ _id: id, company: req.user.company, status: { $nin: ['withdrawn', 'rejected'] } })
+    .populate('candidate', 'name email')
+    .populate('job', 'title')
   if (!application) return res.status(404).json({ error: 'Application not found.' })
-  const interview = await Interview.create({ ...input, scheduledAt: new Date(input.scheduledAt), candidate: application.candidate, company: application.company, application: application._id })
+  const interview = await Interview.create({ ...input, scheduledAt: new Date(input.scheduledAt), candidate: application.candidate._id, company: application.company, application: application._id })
   application.status = 'interview_scheduled'
   await application.save()
-  await Notification.create({ user: application.candidate, type: 'interview_scheduled', title: 'Interview scheduled', message: `An interview has been scheduled for ${new Date(input.scheduledAt).toLocaleString()}.`, relatedId: interview._id })
-  res.status(201).json({ interview })
+  await Notification.create({ user: application.candidate._id, type: 'interview_scheduled', title: 'Interview scheduled', message: `An interview has been scheduled for ${new Date(input.scheduledAt).toLocaleString()}.`, relatedId: interview._id })
+  let emailResult
+  try {
+    emailResult = await sendInterviewEmail({
+      to: application.candidate.email,
+      candidateName: application.candidate.name,
+      companyName: req.company.name,
+      jobTitle: application.job.title,
+      scheduledAt: interview.scheduledAt,
+      durationMinutes: interview.durationMinutes,
+      meetingUrl: interview.meetingUrl,
+      notes: interview.notes,
+    })
+  } catch (error) {
+    console.error('Interview email delivery failed:', error)
+    emailResult = { sent: false, error: 'The interview is scheduled and the in-app notification was created, but email delivery failed. Check the API server logs.' }
+  }
+  if (!emailResult.sent) console.error(`Interview email was not sent: ${emailResult.error}`)
+  res.status(201).json({ interview, emailSent: emailResult.sent, emailError: emailResult.error || '' })
 })
 
 router.get('/dashboard/admin', requireUser, requireRoles('super_admin'), async (_req, res) => {

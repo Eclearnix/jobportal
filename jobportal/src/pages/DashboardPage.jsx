@@ -1,4 +1,5 @@
 import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, ClipboardList, FileText,
   LayoutDashboard, LogOut, Search, Settings, Shield, Users, UserRound, X,
@@ -76,7 +77,7 @@ function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here 
   )
 }
 
-function ScheduleInterviewForm({ applicationId, onSaved }) {
+function ScheduleInterviewForm({ applicationId, onSaved, onScheduled }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -88,7 +89,7 @@ function ScheduleInterviewForm({ applicationId, onSaved }) {
     setError('')
     const form = new FormData(event.currentTarget)
     try {
-      await api(`/recruiter/applications/${applicationId}/interviews`, {
+      const result = await api(`/recruiter/applications/${applicationId}/interviews`, {
         method: 'POST',
         body: {
           scheduledAt: new Date(String(form.get('scheduledAt'))).toISOString(),
@@ -98,6 +99,9 @@ function ScheduleInterviewForm({ applicationId, onSaved }) {
         },
       })
       setOpen(false)
+      onScheduled(result.emailSent
+        ? 'Interview scheduled and email sent to the candidate.'
+        : `Interview scheduled and in-app notification created, but email was not sent. ${result.emailError}`)
       await onSaved()
     } catch (scheduleError) {
       setError(scheduleError.message)
@@ -107,19 +111,33 @@ function ScheduleInterviewForm({ applicationId, onSaved }) {
   }
 
   return (
-    <div className="interview-scheduler">
+    <>
       <button type="button" className="org-action-button" onClick={() => { setOpen(!open); setError('') }}>
         {open ? 'Cancel' : 'Schedule interview'}
       </button>
-      {open && <form className="interview-scheduler-form" onSubmit={submit}>
-        <label>Date and time<input name="scheduledAt" type="datetime-local" required min={minimumDateTime} /></label>
-        <label>Duration<select name="durationMinutes" defaultValue="30"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
-        <label>Meeting link<input name="meetingUrl" type="url" maxLength={500} placeholder="https://…" /></label>
-        <label>Notes<textarea name="notes" rows="2" maxLength="2000" /></label>
-        {error && <p className="auth-error" role="alert">{error}</p>}
-        <button type="submit" className="green-button" disabled={busy}>{busy ? 'Scheduling…' : 'Confirm interview'}</button>
-      </form>}
-    </div>
+      {open && createPortal(
+        <div className="interview-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !busy) setOpen(false)
+        }}>
+          <section className="interview-modal" role="dialog" aria-modal="true" aria-labelledby={`interview-title-${applicationId}`}>
+            <h2 id={`interview-title-${applicationId}`}>Schedule interview</h2>
+            <p>Choose a time and share the meeting details with the candidate.</p>
+            <form className="interview-scheduler-form" onSubmit={submit}>
+              <label>Date and time<input name="scheduledAt" type="datetime-local" required min={minimumDateTime} /></label>
+              <label>Duration<select name="durationMinutes" defaultValue="30"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
+              <label>Meeting link<input name="meetingUrl" type="url" maxLength={500} placeholder="https://…" /></label>
+              <label>Notes<textarea name="notes" rows="3" maxLength="2000" /></label>
+              {error && <p className="auth-error" role="alert">{error}</p>}
+              <div className="interview-modal-actions">
+                <button type="button" className="subtle-button" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
+                <button type="submit" className="green-button" disabled={busy}>{busy ? 'Scheduling…' : 'Confirm interview'}</button>
+              </div>
+            </form>
+          </section>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
 
@@ -210,9 +228,10 @@ function JobPostForm({ onCreated }) {
 
   async function submit(event) {
     event.preventDefault()
+    const formElement = event.currentTarget
     setBusy(true)
     setError('')
-    const form = new FormData(event.currentTarget)
+    const form = new FormData(formElement)
     try {
       const result = await api('/recruiter/jobs', {
         method: 'POST',
@@ -228,7 +247,7 @@ function JobPostForm({ onCreated }) {
           status: event.nativeEvent.submitter?.value === 'review' ? 'pending_review' : 'draft',
         },
       })
-      event.currentTarget.reset()
+      formElement.reset()
       onCreated(result.job)
     } catch (submitError) {
       setError(submitError.message)
@@ -260,7 +279,7 @@ function JobPostForm({ onCreated }) {
   )
 }
 
-function CandidateProfile({ profile, onSaved }) {
+function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [resumeBusy, setResumeBusy] = useState(false)
@@ -270,6 +289,7 @@ function CandidateProfile({ profile, onSaved }) {
     event.preventDefault()
     setBusy(true)
     setError('')
+    onProfileSaveStart()
     const form = new FormData(event.currentTarget)
     try {
       await api('/candidate/profile', { method: 'PATCH', body: {
@@ -280,7 +300,7 @@ function CandidateProfile({ profile, onSaved }) {
         skills: String(form.get('skills') || '').split(',').map((item) => item.trim()).filter(Boolean),
         preferredLocations: String(form.get('preferredLocations') || '').split(',').map((item) => item.trim()).filter(Boolean),
       } })
-      await onSaved()
+      await onProfileSaved()
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -451,6 +471,9 @@ function DashboardWorkspace({ role }) {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [actionError, setActionError] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
+  const [profileSaveMessage, setProfileSaveMessage] = useState('')
+  const [jobPostMessage, setJobPostMessage] = useState('')
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [today] = useState(() => new Date())
   const navItems = navigation[role]
@@ -459,8 +482,8 @@ function DashboardWorkspace({ role }) {
     ? role === 'candidate' ? `Welcome back, ${user.name.split(' ')[0]}.` : role === 'recruiter' ? `Welcome back, ${user.name.split(' ')[0]}.` : 'Your platform, at a glance.'
     : activePage
 
-  const reload = useCallback(async () => {
-    setLoading(true)
+  const reload = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true)
     setError('')
     try {
       const overviewPath = role === 'candidate' ? '/dashboard/candidate' : role === 'recruiter' ? '/dashboard/recruiter' : '/dashboard/admin'
@@ -517,9 +540,14 @@ function DashboardWorkspace({ role }) {
       setError(loadError.message)
       if (role === 'recruiter' && /organization registration/i.test(loadError.message)) navigate('/onboarding/recruiter', { replace: true })
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }, [activePage, navigate, role])
+
+  const refreshAfterProfileSave = useCallback(async () => {
+    await reload({ quiet: true })
+    setProfileSaveMessage('Your profile has been updated successfully.')
+  }, [reload])
 
   useEffect(() => { reload() }, [reload])
 
@@ -527,6 +555,9 @@ function DashboardWorkspace({ role }) {
     navigate(label === 'Overview' ? paths[role] : `${paths[role]}/${slug(label)}`)
     setSearch('')
     setActionError('')
+    setActionMessage('')
+    setProfileSaveMessage('')
+    setJobPostMessage('')
   }
 
   const mutate = async (operation) => {
@@ -644,7 +675,7 @@ function DashboardWorkspace({ role }) {
       rows={rows}
       actions={(row) => activePage === 'Manage Jobs'
         ? <button className="org-action-button" type="button" onClick={() => mutate(() => api(`/recruiter/jobs/${row.id}/status`, { method: 'PATCH', body: { status: row.resource.status === 'published' ? 'paused' : 'published' } }))}>{row.resource.status === 'published' ? 'Pause' : 'Publish'}</button>
-        : <div className="application-actions"><select aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button><ScheduleInterviewForm applicationId={row.id} onSaved={reload} /></div>}
+        : <div className="application-actions"><select aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button><ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} /></div>}
       empty="No records to show yet."
     />
   } else if (isRecruiter && activePage === 'Interviews') {
@@ -716,7 +747,10 @@ function DashboardWorkspace({ role }) {
 
           {isRecruiter && payload?.company?.status !== 'verified' && <div className="demo-banner"><span className="demo-banner-icon">i</span><span><strong>Organization verification</strong> &nbsp;Your profile is under review. You can prepare job drafts, but only verified organizations can publish.</span></div>}
           {actionError && <ErrorNotice message={actionError} />}
+          {actionMessage && <p className="integration-notice" role="status">{actionMessage}</p>}
           {error && <ErrorNotice message={error} onRetry={reload} />}
+          {profileSaveMessage && <p className="profile-save-success" role="status">{profileSaveMessage}</p>}
+          {jobPostMessage && <p className="integration-notice" role="status">{jobPostMessage}</p>}
               {selectedCandidate && <CandidatePreview candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />}
 
           {loading && payload && <Loading />}
@@ -733,13 +767,18 @@ function DashboardWorkspace({ role }) {
           )}
 
           {!loading && !error && isCandidate && activePage === 'Find Jobs' && <JobSearch onOpen={(id) => navigate(`/jobs/${id}`)} onSaved={(id) => mutate(() => saveJob(id))} />}
-          {!loading && !error && isRecruiter && activePage === 'Post a Job' && <JobPostForm onCreated={() => goTo('Manage Jobs')} />}
-          {!loading && !error && isCandidate && activePage === 'My Profile' && <CandidateProfile profile={viewData?.profile} onSaved={reload} />}
-          {!loading && !error && isCandidate && activePage === 'Resume' && <CandidateProfile profile={viewData?.profile} onSaved={reload} />}
+          {!loading && !error && isRecruiter && activePage === 'Post a Job' && <JobPostForm onCreated={(job) => {
+            goTo('Manage Jobs')
+            setJobPostMessage(job.status === 'pending_review'
+              ? 'Job submitted for review. Candidates will see it after it is approved and published.'
+              : 'Draft saved. Publish it when ready; candidates only see published jobs.')
+          }} />}
+          {!loading && !error && isCandidate && activePage === 'My Profile' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
+          {!loading && !error && isCandidate && activePage === 'Resume' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
           {!loading && !error && isAdmin && activePage === 'Settings' && <SuperAdminSettings settings={viewData?.items || []} reload={reload} />}
           {!loading && !error && isAdmin && activePage === 'Admin Management' && <AdminInvites data={viewData} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Company Profile' && <CompanyProfile company={viewData?.company} onSaved={reload} />}
-          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateProfile profile={viewData?.profile} onSaved={reload} />}
+          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
           {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} />}
           {!loading && !error && table && <section className="module-section">{canSearch && <div className="module-heading"><div><h2>{activePage}</h2><p>Search and manage workspace records.</p></div><input className="module-search" aria-label={`Filter ${activePage}`} placeholder="Filter results…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}{filteredTable}</section>}
 

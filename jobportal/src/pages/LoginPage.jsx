@@ -43,7 +43,7 @@ export default function LoginPage({ superAdmin = false }) {
   return (
     <main className="login-page">
       <Aurora
-        colorStops={['#94a3b8', '#94a3b8', '#ffffff']}
+        colorStops={['#0b3d91', '#1677ff', '#7db7ff']}
         amplitude={1}
         blend={0.5}
         height={0.45}

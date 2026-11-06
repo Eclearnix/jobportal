@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit'
 import helmet from 'helmet'
 import multer from 'multer'
 import mongoose from 'mongoose'
+import { fileURLToPath } from 'node:url'
 import apiRoutes from './routes.js'
 
 const requiredEnvironment = ['MONGODB_URI', 'JWT_SECRET']
@@ -53,13 +54,15 @@ app.use((error, _req, res, _next) => {
 })
 
 const port = Number(process.env.PORT) || 4000
-const server = app.listen(port, () => console.info(`Eclearnix Jobs API listening on port ${port}`))
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const server = app.listen(port, () => console.info(`Eclearnix Jobs API listening on port ${port}`))
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => server.close(async () => {
-    await mongoose.disconnect()
-    process.exit(0)
-  }))
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => server.close(async () => {
+      await mongoose.disconnect()
+      process.exit(0)
+    }))
+  }
 }
 
 export { app }

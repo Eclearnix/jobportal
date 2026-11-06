@@ -1,6 +1,6 @@
 # Eclearnix Jobs
 
-Eclearnix Jobs is a role-based job marketplace built with React, Vite, Express, MongoDB, Google Identity Services, and private Cloudflare R2 file storage.
+Eclearnix Jobs is a role-based job marketplace built with React, Vite, Express, MongoDB, and Google Identity Services. Private resumes are stored in MongoDB GridFS.
 
 ## Workspaces
 
@@ -14,12 +14,13 @@ Super Admin sign-in is separate at `/super-admin/login`. Public sign-in endpoint
 
 1. Install Node.js 20.19+ and MongoDB Atlas (or a local MongoDB replica set).
 2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a random `JWT_SECRET` of at least 32 characters, `GOOGLE_CLIENT_ID`, and `VITE_GOOGLE_CLIENT_ID`. `CLIENT_ORIGIN` accepts a comma-separated allowlist; the Google client ID must match the OAuth web client configured for the local origin.
-3. Configure the Cloudflare R2 account, access key, secret, and private bucket variables to enable resume upload and signed downloads.
-4. Install packages with `npm install`.
-5. Start the API with `npm run server`.
-6. In another terminal, start Vite with `npm run dev`.
+3. Resume uploads are stored in the MongoDB database configured by `MONGODB_URI`; no separate file-storage account is required. GridFS stores resume files in the `resumes.files` and `resumes.chunks` collections.
+4. To email candidates about scheduled interviews, configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in the server `.env`. The sender address must be allowed by your Resend account (verify your sending domain for general delivery). Without these settings, interview scheduling and in-app notifications still work, and the recruiter sees an explicit email delivery warning.
+5. Install packages with `npm install`.
+6. Start the API with `npm run server`.
+7. In another terminal, start Vite with `npm run dev`.
 
-Vite proxies `/api` requests to `http://localhost:4000`. The API refuses to start without its MongoDB URI and signing secret. Google sign-in and file upload report explicit configuration errors until their provider settings are supplied. This app verifies Google Identity Services ID tokens, so it needs the OAuth client ID in both Google ID variables but does not use a Google client secret.
+Vite proxies `/api` requests to `http://localhost:4000`. The API refuses to start without its MongoDB URI and signing secret. Google sign-in reports explicit configuration errors until its provider settings are supplied. This app verifies Google Identity Services ID tokens, so it needs the OAuth client ID in both Google ID variables but does not use a Google client secret.
 
 ### Provisioning the first Super Admin
 
@@ -40,9 +41,9 @@ The administrator must then sign in at `/super-admin/login` using the Google acc
 - `server/models` — timestamped Mongoose schemas and indexes.
 - `server/middleware` — cookie-session, role, and organization membership checks.
 - `server/routes.js` — validated REST endpoints for account, jobs, applications, organization, recruiter, and platform administration workflows.
-- `server/storage.js` — private R2 object storage and expiring signed downloads.
+- `server/storage.js` — private resume uploads and authenticated downloads through MongoDB GridFS.
 
-The API uses backend-verified Google ID tokens, role-specific sign-in endpoints, HTTP-only session cookies, organization membership checks, paginated list endpoints, unique email/application indexes, and transactional Super Admin changes with audit records. Candidate applications and recruiter records are scoped to their authenticated owner or organization.
+The API uses backend-verified Google ID tokens, role-specific sign-in endpoints, HTTP-only session cookies, organization membership checks, paginated list endpoints, unique email/application indexes, and transactional Super Admin changes with audit records. Candidate applications and recruiter records are scoped to their authenticated owner or organization. Resume download endpoints verify the signed-in candidate or the recruiter's organization membership before streaming private files.
 
 ## Validation
 

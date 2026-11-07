@@ -21,10 +21,20 @@ function loadGoogleIdentity() {
 
 export default function GoogleSignInButton({ role, onCredential, disabled = false }) {
   const buttonRef = useRef(null)
+  const shellRef = useRef(null)
   const callbackRef = useRef(onCredential)
   const generationRef = useRef(0)
   const [error, setError] = useState('')
+  const [hovered, setHovered] = useState(false)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+  function updateSpecularLight(event) {
+    const shell = shellRef.current
+    if (!shell) return
+    const bounds = shell.getBoundingClientRect()
+    shell.style.setProperty('--google-light-x', `${event.clientX - bounds.left}px`)
+    shell.style.setProperty('--google-light-y', `${event.clientY - bounds.top}px`)
+  }
 
   useEffect(() => {
     callbackRef.current = onCredential
@@ -50,7 +60,7 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
         container.replaceChildren()
         google.accounts.id.renderButton(container, {
           type: 'standard',
-          theme: 'outline',
+          theme: 'filled_black',
           size: 'large',
           shape: 'rectangular',
           text: 'continue_with',
@@ -73,7 +83,13 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
   }
 
   return (
-    <div className={`google-signin ${disabled ? 'google-signin-disabled' : ''}`}>
+    <div
+      ref={shellRef}
+      onPointerMove={updateSpecularLight}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      className={`google-signin ${hovered ? 'google-signin-hover' : ''} ${disabled ? 'google-signin-disabled' : ''}`}
+    >
       <div ref={buttonRef} aria-label={`Continue with Google as ${role}`} />
       {disabled && <span className="google-signin-cover" aria-hidden="true" />}
       {error && <p className="integration-error" role="alert">{error}</p>}

@@ -276,6 +276,12 @@ const Aurora = ({
     });
     if (!container || !canvas || !gl) return undefined;
 
+    const onContextLost = event => {
+      event.preventDefault();
+      container.classList.add('aurora-fallback');
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost, false);
+
     const program = link(gl);
     if (!program) return undefined;
     const u = program.uniforms;
@@ -460,10 +466,10 @@ const Aurora = ({
       window.removeEventListener('pointercancel', onPointerUp);
       document.documentElement.removeEventListener('pointerleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibility);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
       gl.deleteProgram(program.program);
       gl.deleteBuffer(buffer);
       gl.deleteVertexArray(vao);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, []);
 
@@ -479,4 +485,3 @@ const Aurora = ({
 };
 
 export default Aurora;
-

@@ -1765,11 +1765,14 @@ button {
   min-height: 48px;
 }
 
-.google-signin iframe {
-  display: block;
+.google-signin > div > div {
   width: 100% !important;
-  height: 48px !important;
-  max-width: 100%;
+  max-width: 100% !important;
+  overflow: hidden;
+}
+
+.google-signin iframe {
+  display: none !important;
 }
 
 .google-signin-disabled .google-signin-cover {

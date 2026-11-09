@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ArrowRight, BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
+import { BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import Aurora from '../components/Aurora'
@@ -19,8 +19,8 @@ function Brand() {
   )
 }
 
-export default function LoginPage({ superAdmin = false }) {
-  const [role, setRole] = useState(superAdmin ? 'super_admin' : 'candidate')
+export default function LoginPage() {
+  const [role, setRole] = useState('candidate')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const { signInWithGoogle } = useAuth()
@@ -31,8 +31,8 @@ export default function LoginPage({ superAdmin = false }) {
     setError('')
     try {
       const { user, onboardingRequired } = await signInWithGoogle(role, credential)
-      const path = user.role === 'candidate' ? '/candidate' : user.role === 'recruiter' ? '/organization' : '/super-admin'
-      navigate(onboardingRequired && user.role !== 'super_admin' ? `/onboarding/${user.role}` : path, { replace: true })
+      const path = user.role === 'candidate' ? '/candidate' : '/organization'
+      navigate(onboardingRequired ? `/onboarding/${user.role}` : path, { replace: true })
     } catch (loginError) {
       setError(loginError.message)
     } finally {
@@ -67,39 +67,32 @@ export default function LoginPage({ superAdmin = false }) {
 
       <section className="login-panel">
         <div className="login-panel-top">
-          {superAdmin ? <Link to="/login">← Back to Eclearnix Jobs</Link> : <span>Already part of the community?</span>}
+          <span>Already part of the community?</span>
         </div>
         <div className="login-box">
           <div className="mobile-brand"><Brand /></div>
           <div className="login-heading">
-            <span className="login-eyebrow">{superAdmin ? 'RESTRICTED PLATFORM ACCESS' : 'ECLEARNIX JOBS WORKSPACE'}</span>
-            <h2>{superAdmin ? 'Super Admin sign in.' : 'How will you use Eclearnix?'}</h2>
-            <p>{superAdmin ? 'Sign in with an authorized platform administrator account.' : 'Choose your account type, then continue with Google.'}</p>
+            <span className="login-eyebrow">ECLEARNIX JOBS WORKSPACE</span>
+            <h2>How will you use Eclearnix?</h2>
+            <p>Choose your account type, then continue with Google.</p>
           </div>
 
-          {superAdmin ? (
-            <div className="admin-note"><ShieldCheck size={16} /> Super Admin access is provisioned by an existing administrator. There is no public admin registration.</div>
-          ) : (
-            <>
-              <div className="role-picker" aria-label="Choose your account type">
-                {publicRoles.map(({ id, name, detail, Icon }) => (
-                  <button
-                    type="button"
-                    key={id}
-                    className={`role-option cursor-target ${role === id ? 'role-option-active' : ''}`}
-                    data-cursor-label={name}
-                    aria-pressed={role === id}
-                    onClick={() => { setRole(id); setError('') }}
-                  >
-                    <span className="role-option-icon"><Icon size={17} /></span>
-                    <span className="role-option-copy"><strong>{name}</strong><small>{detail}</small></span>
-                    <span className="role-radio" />
-                  </button>
-                ))}
-              </div>
-              <p className="super-admin-link">Platform administrator? <Link to="/super-admin/login">Go to Super Admin sign in <ArrowRight size={12} /></Link></p>
-            </>
-          )}
+          <div className="role-picker" aria-label="Choose your account type">
+            {publicRoles.map(({ id, name, detail, Icon }) => (
+              <button
+                type="button"
+                key={id}
+                className={`role-option cursor-target ${role === id ? 'role-option-active' : ''}`}
+                data-cursor-label={name}
+                aria-pressed={role === id}
+                onClick={() => { setRole(id); setError('') }}
+              >
+                <span className="role-option-icon"><Icon size={17} /></span>
+                <span className="role-option-copy"><strong>{name}</strong><small>{detail}</small></span>
+                <span className="role-radio" />
+              </button>
+            ))}
+          </div>
 
           <div className="google-login-area">
             <GoogleSignInButton role={role} onCredential={handleCredential} disabled={busy} />

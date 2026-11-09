@@ -18,7 +18,7 @@ import {
   Setting,
   User,
 } from './models/index.js'
-import { requireCompanyMember, requireRoles, requireUser } from './middleware/auth.js'
+import { requireCompanyMember, requirePrimaryAdmin, requireRoles, requireUser } from './middleware/auth.js'
 import { savePrivateFile, streamPrivateFile } from './storage.js'
 import { sendInterviewEmail } from './email.js'
 
@@ -132,7 +132,7 @@ function issueSession(user, res) {
   res.cookie('ecl_session', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 8 * 60 * 60 * 1000,
     path: '/',
   })
@@ -287,7 +287,12 @@ router.get('/auth/me', requireUser, async (req, res) => {
 })
 
 router.post('/auth/logout', (_req, res) => {
-  res.clearCookie('ecl_session', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' })
+  res.clearCookie('ecl_session', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+  })
   res.status(204).end()
 })
 
@@ -886,15 +891,21 @@ router.get('/admin/applications', requireUser, requireRoles('super_admin'), asyn
   res.json({ items, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
-router.get('/admin/admins', requireUser, requireRoles('super_admin'), async (_req, res) => {
+router.get('/admin/admins', requireUser, requireRoles('super_admin'), async (req, res) => {
   const [admins, invites] = await Promise.all([
     User.find({ role: 'super_admin' }).select('name email status createdAt').sort({ createdAt: 1 }).lean(),
     AdminInvite.find({ expiresAt: { $gt: new Date() } }).select('email expiresAt createdAt').lean(),
   ])
-  res.json({ admins, invites })
+  const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase() || ''
+  res.json({
+    admins: admins.map((admin) => ({ ...admin, isPrimaryAdmin: admin.email.toLowerCase() === primaryAdminEmail })),
+    invites,
+    currentUserIsPrimaryAdmin: Boolean(primaryAdminEmail) && req.user.email.toLowerCase() === primaryAdminEmail,
+    primaryAdminConfigured: Boolean(primaryAdminEmail),
+  })
 })
 
-router.post('/admin/admin-invitations', requireUser, requireRoles('super_admin'), async (req, res) => {
+router.post('/admin/admin-invitations', requireUser, requireRoles('super_admin'), requirePrimaryAdmin, async (req, res) => {
   const { email } = validate(z.object({ email: z.string().email().max(240) }).strict(), req.body)
   const normalizedEmail = email.toLowerCase()
   const existingUser = await User.findOne({ email: normalizedEmail })
@@ -907,7 +918,7 @@ router.post('/admin/admin-invitations', requireUser, requireRoles('super_admin')
   res.status(201).json({ invite })
 })
 
-router.delete('/admin/admin-invitations/:inviteId', requireUser, requireRoles('super_admin'), async (req, res) => {
+router.delete('/admin/admin-invitations/:inviteId', requireUser, requireRoles('super_admin'), requirePrimaryAdmin, async (req, res) => {
   const id = validate(objectId, req.params.inviteId)
   await adminTransaction(req, { action: 'admin.invite_revoked', targetType: 'admin_invite', target: id }, async (session) => {
     const result = await AdminInvite.deleteOne({ _id: id }, { session })

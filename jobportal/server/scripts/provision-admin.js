@@ -7,6 +7,10 @@ if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required.')
 if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
   throw new Error('Usage: npm run admin:provision -- admin@example.com')
 }
+const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase()
+if (primaryAdminEmail && email !== primaryAdminEmail) {
+  throw new Error('The email must match PRIMARY_ADMIN_EMAIL when provisioning the primary administrator.')
+}
 
 await mongoose.connect(process.env.MONGODB_URI)
 try {
@@ -20,7 +24,7 @@ try {
     role: 'super_admin',
     status: 'active',
   })
-  console.info(`Super Admin account provisioned for ${admin.email}. Sign in at /super-admin/login with its verified Google account.`)
+  console.info(`Super Admin account provisioned for ${admin.email}. Sign in through the standalone Super Admin frontend with its verified Google account.`)
 } finally {
   await mongoose.disconnect()
 }

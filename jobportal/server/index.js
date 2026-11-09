@@ -13,11 +13,16 @@ const requiredEnvironment = ['MONGODB_URI', 'JWT_SECRET']
 const missingEnvironment = requiredEnvironment.filter((key) => !process.env[key])
 if (missingEnvironment.length) throw new Error(`Missing required server environment: ${missingEnvironment.join(', ')}`)
 if (process.env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be at least 32 characters long.')
+if (process.env.PRIMARY_ADMIN_EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(process.env.PRIMARY_ADMIN_EMAIL.trim())) {
+  throw new Error('PRIMARY_ADMIN_EMAIL must be a valid email address.')
+}
 
 await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
 
 const app = express()
-const allowedOrigins = new Set((process.env.CLIENT_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173')
+const allowedOrigins = new Set([process.env.CLIENT_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173', process.env.ADMIN_CLIENT_ORIGIN]
+  .filter(Boolean)
+  .join(',')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean))

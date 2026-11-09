@@ -24,6 +24,15 @@ export function requireRoles(...roles) {
   }
 }
 
+export function requirePrimaryAdmin(req, res, next) {
+  const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase()
+  if (!primaryAdminEmail) return res.status(503).json({ error: 'Primary administrator access is not configured.' })
+  if (req.user?.email?.toLowerCase() !== primaryAdminEmail) {
+    return res.status(403).json({ error: 'Only the primary administrator can manage administrator invitations.' })
+  }
+  return next()
+}
+
 export async function requireCompanyMember(req, res, next) {
   const company = req.user?.company && await Company.findOne({
     _id: req.user.company,

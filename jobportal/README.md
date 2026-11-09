@@ -8,12 +8,12 @@ Eclearnix Jobs is a role-based job marketplace built with React, Vite, Express, 
 - **Organization / HR** — organization onboarding and verification, job drafts and publishing, applications, interviews, and team invitations.
 - **Super Admin** — restricted access, organization and user management, job moderation, reports, analytics, master settings, administrator invitations, and audit history.
 
-Super Admin sign-in is separate at `/super-admin/login`. Public sign-in endpoints cannot assign the Super Admin role. A first administrator must be provisioned by an operator with database access.
+Super Admin sign-in is provided by the separate `jobportal-superAdmin` frontend. Public sign-in endpoints cannot assign the Super Admin role. A first administrator must be provisioned by an operator with database access.
 
 ## Local setup
 
 1. Install Node.js 20.19+ and MongoDB Atlas (or a local MongoDB replica set).
-2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a random `JWT_SECRET` of at least 32 characters, `GOOGLE_CLIENT_ID`, and `VITE_GOOGLE_CLIENT_ID`. `CLIENT_ORIGIN` accepts a comma-separated allowlist; the Google client ID must match the OAuth web client configured for the local origin.
+2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a random `JWT_SECRET` of at least 32 characters, `GOOGLE_CLIENT_ID`, and `VITE_GOOGLE_CLIENT_ID`. `CLIENT_ORIGIN` accepts a comma-separated allowlist for the job portal; set `ADMIN_CLIENT_ORIGIN` to the exact origin of the separate Super Admin frontend. Set `PRIMARY_ADMIN_EMAIL` to the designated primary administrator's email. Configure both frontend origins in the Google OAuth web client.
 3. Resume uploads are stored in the MongoDB database configured by `MONGODB_URI`; no separate file-storage account is required. GridFS stores resume files in the `resumes.files` and `resumes.chunks` collections.
 4. To email candidates about scheduled interviews, configure Gmail SMTP in the server `.env` with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. `SMTP_PASSWORD` must be a Google App Password for the Gmail account, not the normal account password. Without these settings, interview scheduling and in-app notifications still work, and the recruiter sees an explicit email delivery warning.
 5. Install packages with `npm install`.
@@ -30,10 +30,12 @@ Add these environment variables in Vercel for Production, Preview, and Developme
 
 ```text
 VITE_GOOGLE_CLIENT_ID
+VITE_SUPER_ADMIN_URL
 MONGODB_URI
 JWT_SECRET
 GOOGLE_CLIENT_ID
 CLIENT_ORIGIN
+ADMIN_CLIENT_ORIGIN
 TRUST_PROXY=true
 SMTP_HOST
 SMTP_PORT
@@ -43,30 +45,30 @@ SMTP_PASSWORD
 SMTP_FROM
 ```
 
-Set `CLIENT_ORIGIN` to the exact deployed frontend origin, such as `https://your-project.vercel.app`. Add each Vercel preview domain that needs access as a comma-separated origin. Do not expose server variables with a `VITE_` prefix.
+Set `CLIENT_ORIGIN` to the exact deployed job portal frontend origin, such as `https://your-project.vercel.app`, and set `ADMIN_CLIENT_ORIGIN` to the exact deployed Super Admin frontend origin. Add each approved preview domain that needs API access to the matching allowlist. Do not expose server variables with a `VITE_` prefix.
 
 ### Provisioning the first Super Admin
 
-After setting up the database, provision a dedicated administrator account from a trusted operator terminal:
+Set `PRIMARY_ADMIN_EMAIL=eclearnix.jobs@gmail.com` in the backend `.env` or deployment environment, then restart/redeploy the backend. The account must have the `super_admin` role. If it has not yet been provisioned, run this from a trusted operator terminal:
 
 ```powershell
-npm run admin:provision -- admin@example.com
+npm run admin:provision -- eclearnix.jobs@gmail.com
 ```
 
-The administrator must then sign in at `/super-admin/login` using the Google account with that verified email. Only an authenticated Super Admin can invite additional Super Admins, and invitees must verify the invited email through Google.
+The administrator must then sign in through the separate Super Admin frontend using the Google account with that verified email. Only the configured primary administrator can invite or revoke additional Super Admins. Invitees must verify the invited email through Google. Changing `PRIMARY_ADMIN_EMAIL` and restarting the backend transfers the primary designation; the new address must already have the `super_admin` role. The old primary remains a Super Admin but loses the ability to manage invitations.
 
 ## Architecture
 
 - `src/context` — browser session context.
 - `src/services` — credentialed API client and query helpers.
 - `src/components` — shared sign-in UI.
-- `src/pages` — login, onboarding, candidate/recruiter/admin workspaces, and job details.
+- `src/pages` — job portal login, onboarding, candidate/recruiter workspaces, and job details.
 - `server/models` — timestamped Mongoose schemas and indexes.
 - `server/middleware` — cookie-session, role, and organization membership checks.
 - `server/routes.js` — validated REST endpoints for account, jobs, applications, organization, recruiter, and platform administration workflows.
 - `server/storage.js` — private resume uploads and authenticated downloads through MongoDB GridFS.
 
-The API uses backend-verified Google ID tokens, role-specific sign-in endpoints, HTTP-only session cookies, organization membership checks, paginated list endpoints, unique email/application indexes, and transactional Super Admin changes with audit records. Candidate applications and recruiter records are scoped to their authenticated owner or organization. Resume download endpoints verify the signed-in candidate or the recruiter's organization membership before streaming private files.
+The API uses backend-verified Google ID tokens, role-specific sign-in endpoints, HTTP-only session cookies, organization membership checks, paginated list endpoints, unique email/application indexes, and transactional Super Admin changes with audit records. Every `/admin/*` endpoint and `/dashboard/admin` requires a valid session and the `super_admin` role on the backend. Candidate applications and recruiter records are scoped to their authenticated owner or organization. Resume download endpoints verify the signed-in candidate or the recruiter's organization membership before streaming private files.
 
 ## Validation
 

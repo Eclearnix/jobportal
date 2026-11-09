@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ArrowRight, BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
+import { BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import GoogleSignInButton from '../components/GoogleSignInButton'
 import Aurora from '../components/Aurora'
@@ -97,7 +97,6 @@ export default function LoginPage({ superAdmin = false }) {
                   </button>
                 ))}
               </div>
-              <p className="super-admin-link">Platform administrator? <Link to="/super-admin/login">Go to Super Admin sign in <ArrowRight size={12} /></Link></p>
             </>
           )}
 

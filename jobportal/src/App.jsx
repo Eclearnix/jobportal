@@ -11,9 +11,9 @@ function SuperAdminPortalRedirect() {
   useEffect(() => {
     if (adminUrl) window.location.replace(adminUrl)
   }, [adminUrl])
-  if (adminUrl) return <PageLoader />
-  if (import.meta.env.DEV) return <Navigate to="/super-admin" replace />
-  return <div className="workspace-error" role="alert">Super Admin access is handled by a separate app. Configure VITE_SUPER_ADMIN_URL to continue.</div>
+  return adminUrl
+    ? <PageLoader />
+    : <div className="workspace-error" role="alert">Super Admin access is handled by a separate app. Configure VITE_SUPER_ADMIN_URL to continue.</div>
 }
 
 function PageLoader() {
@@ -78,8 +78,6 @@ function AppRoutes() {
       <Route path="/candidate/:section" element={<ProtectedRoute role="candidate"><DashboardPage role="candidate" /></ProtectedRoute>} />
       <Route path="/organization" element={<ProtectedRoute role="recruiter"><DashboardPage role="recruiter" /></ProtectedRoute>} />
       <Route path="/organization/:section" element={<ProtectedRoute role="recruiter"><DashboardPage role="recruiter" /></ProtectedRoute>} />
-      <Route path="/super-admin" element={<ProtectedRoute role="super_admin"><DashboardPage role="super_admin" /></ProtectedRoute>} />
-      <Route path="/super-admin/:section" element={<ProtectedRoute role="super_admin"><DashboardPage role="super_admin" /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

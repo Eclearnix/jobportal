@@ -8,7 +8,7 @@ Eclearnix Jobs is a role-based job marketplace built with React, Vite, Express, 
 - **Organization / HR** — organization onboarding and verification, job drafts and publishing, applications, interviews, and team invitations.
 - **Super Admin** — restricted access, organization and user management, job moderation, reports, analytics, master settings, administrator invitations, and audit history.
 
-Super Admin sign-in is provided by the separate `jobportal-superAdmin` frontend. Public sign-in endpoints cannot assign the Super Admin role. A first administrator must be provisioned by an operator with database access.
+Super Admin sign-in is provided by the separate `jobportal-superAdmin` frontend. During local development, if `VITE_SUPER_ADMIN_URL` is unset, an existing Super Admin session uses the built-in admin workspace. Public sign-in endpoints cannot assign the Super Admin role. A first administrator must be provisioned by an operator with database access.
 
 ## Local setup
 

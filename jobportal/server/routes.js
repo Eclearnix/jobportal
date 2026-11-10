@@ -906,6 +906,37 @@ router.get('/admin/admins', requireUser, requireRoles('super_admin'), async (req
   })
 })
 
+router.delete('/admin/admins/:adminId', requireUser, requireRoles('super_admin'), requirePrimaryAdmin, async (req, res) => {
+  const id = validate(objectId, req.params.adminId)
+  const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL.trim().toLowerCase()
+  if (String(id) === String(req.user._id)) {
+    const error = new Error('You cannot remove your own administrator account.')
+    error.status = 400
+    throw error
+  }
+  const admin = await User.findOne({ _id: id, role: 'super_admin' }).select('email').lean()
+  if (!admin) {
+    const error = new Error('Secondary administrator not found.')
+    error.status = 404
+    throw error
+  }
+  if (admin.email.toLowerCase() === primaryAdminEmail) {
+    const error = new Error('The primary administrator account cannot be removed.')
+    error.status = 400
+    throw error
+  }
+  await adminTransaction(req, { action: 'admin.removed', targetType: 'user', target: id, details: { email: admin.email } }, async (session) => {
+    const removed = await User.findOneAndDelete({ _id: id, role: 'super_admin', email: admin.email }, { session }).select('email')
+    if (!removed) {
+      const error = new Error('Secondary administrator not found.')
+      error.status = 404
+      throw error
+    }
+    return removed
+  })
+  res.status(204).end()
+})
+
 router.post('/admin/admin-invitations', requireUser, requireRoles('super_admin'), requirePrimaryAdmin, async (req, res) => {
   const { email } = validate(z.object({ email: z.string().email().max(240) }).strict(), req.body)
   const normalizedEmail = email.toLowerCase()

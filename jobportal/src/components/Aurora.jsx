@@ -463,7 +463,6 @@ const Aurora = ({
       gl.deleteProgram(program.program);
       gl.deleteBuffer(buffer);
       gl.deleteVertexArray(vao);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, []);
 
@@ -479,4 +478,3 @@ const Aurora = ({
 };
 
 export default Aurora;
-

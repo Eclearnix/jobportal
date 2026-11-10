@@ -34,10 +34,33 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
     const container = buttonRef.current
     if (!clientId || !container) return undefined
     const generation = ++generationRef.current
+    let googleIdentity
+    const renderedWidth = { current: 0 }
+
+    const renderGoogleButton = () => {
+      if (!googleIdentity) return
+      const width = Math.min(360, Math.floor(container.clientWidth))
+      if (!width || width === renderedWidth.current) return
+      container.replaceChildren()
+      googleIdentity.accounts.id.renderButton(container, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        shape: 'rectangular',
+        text: 'continue_with',
+        width,
+        locale: 'en',
+      })
+      renderedWidth.current = width
+    }
+
+    const resizeObserver = new ResizeObserver(renderGoogleButton)
+    resizeObserver.observe(container)
 
     loadGoogleIdentity()
       .then((google) => {
         if (generation !== generationRef.current || !container.isConnected) return
+        googleIdentity = google
         google.accounts.id.initialize({
           client_id: clientId,
           callback: (response) => {
@@ -47,16 +70,7 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
           auto_select: false,
           cancel_on_tap_outside: true,
         })
-        container.replaceChildren()
-        google.accounts.id.renderButton(container, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          shape: 'rectangular',
-          text: 'continue_with',
-          width: 360,
-          locale: 'en',
-        })
+        renderGoogleButton()
       })
       .catch((loadError) => {
         if (generation === generationRef.current) setError(loadError.message)
@@ -64,6 +78,7 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
 
     return () => {
       generationRef.current += 1
+      resizeObserver.disconnect()
       container.replaceChildren()
     }
   }, [clientId])

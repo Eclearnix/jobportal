@@ -1,13 +1,15 @@
-import 'dotenv/config'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
+import dotenv from 'dotenv'
 import express from 'express'
 import rateLimit from 'express-rate-limit'
 import helmet from 'helmet'
 import multer from 'multer'
 import mongoose from 'mongoose'
 import { fileURLToPath } from 'node:url'
-import apiRoutes from './routes.js'
+
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) })
+const { default: apiRoutes } = await import('./routes.js')
 
 const requiredEnvironment = ['MONGODB_URI', 'JWT_SECRET']
 const missingEnvironment = requiredEnvironment.filter((key) => !process.env[key])

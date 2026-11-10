@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5173 --strictPort",
     "server": "node server/index.js",
     "server:watch": "node --watch server/index.js",
     "admin:provision": "node server/scripts/provision-admin.js",

@@ -550,7 +550,12 @@ button {
   background: var(--canvas);
 }
 
+.dashboard-main {
+  min-width: 0;
+}
+
 .dashboard-sidebar {
+  position: relative;
   position: sticky;
   top: 0;
   display: flex;
@@ -559,6 +564,92 @@ button {
   padding: 25px 16px 18px;
   border-right: 1px solid var(--line);
   background: white;
+}
+
+.dashboard-sidebar-intro::before,
+.dashboard-sidebar-intro::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -18px;
+  width: 18px;
+  content: '';
+  pointer-events: none;
+  transform: translateX(-100%);
+  animation: sidebar-layer-intro 700ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.dashboard-sidebar-intro::before {
+  background: #d7eee0;
+  animation-delay: 80ms;
+}
+
+.dashboard-sidebar-intro::after {
+  background: #a9d8bb;
+  animation-delay: 40ms;
+}
+
+.dashboard-sidebar-intro > * {
+  position: relative;
+  z-index: 1;
+  animation: sidebar-content-intro 700ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.dashboard-sidebar-intro > .workspace-label {
+  animation-delay: 90ms;
+}
+
+.dashboard-sidebar-intro > .workspace-switcher {
+  animation-delay: 150ms;
+}
+
+.dashboard-sidebar-intro > .dashboard-nav {
+  animation-delay: 210ms;
+}
+
+.dashboard-sidebar-intro > .logout-button {
+  animation-delay: 280ms;
+}
+
+.dashboard-sidebar-intro .dashboard-nav-item {
+  animation: sidebar-item-intro 650ms cubic-bezier(.22, 1, .36, 1) both;
+  animation-delay: calc(300ms + (var(--sidebar-item-index, 0) * 55ms));
+}
+
+@keyframes sidebar-layer-intro {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes sidebar-content-intro {
+  from {
+    opacity: 0;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sidebar-item-intro {
+  from {
+    opacity: 0;
+    transform: translateX(-16px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) rotate(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-sidebar-intro::before,
+  .dashboard-sidebar-intro::after,
+  .dashboard-sidebar-intro > *,
+  .dashboard-sidebar-intro .dashboard-nav-item {
+    animation: none;
+  }
 }
 
 .dashboard-sidebar .brand {
@@ -1459,7 +1550,7 @@ button {
   }
 
   .dashboard-shell {
-    grid-template-columns: 68px minmax(0, 1fr);
+    grid-template-columns: 66px minmax(0, 1fr);
   }
 
   .dashboard-sidebar {
@@ -2283,6 +2374,13 @@ button {
   font-size: 9px;
 }
 
+.job-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
 .empty-state {
   padding: 30px 16px;
   border: 1px dashed #dfe8e1;
@@ -2317,6 +2415,24 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: white;
+}
+
+.resume-page-card {
+  width: min(700px, 100%);
+  min-height: 150px;
+  padding: 28px;
+}
+
+.resume-page-card h3 {
+  margin: 0;
+  color: #344239;
+  font-size: 16px;
+}
+
+.resume-page-card p {
+  margin: 7px 0 0;
+  color: #849087;
+  font-size: 12px;
 }
 
 .resume-manager > div {
@@ -2626,6 +2742,182 @@ button {
     grid-template-columns: 54px minmax(0, 1fr);
   }
 
+  .dashboard-shell .dashboard-sidebar .brand-wordmark {
+    font-size: 19px;
+  }
+
+  .dashboard-shell .workspace-label,
+  .dashboard-shell .nav-section-label {
+    font-size: 11px;
+  }
+
+  .dashboard-shell .workspace-switcher strong {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .workspace-switcher small,
+  .dashboard-shell .dashboard-nav-item,
+  .dashboard-shell .logout-button {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .dashboard-nav-item {
+    min-height: 44px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .dashboard-shell .breadcrumb,
+  .dashboard-shell .profile-name {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .search-box {
+    height: 42px;
+  }
+
+  .dashboard-shell .search-box input,
+  .dashboard-shell .search-box input::placeholder {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .date-line {
+    font-size: 11px;
+  }
+
+  .dashboard-shell .dashboard-welcome p,
+  .dashboard-shell .module-heading p,
+  .dashboard-shell .job-result-main > span {
+    font-size: 13px;
+  }
+
+  .dashboard-shell .dashboard-welcome h1 {
+    font-size: clamp(29px, 3vw, 38px);
+  }
+
+  .dashboard-shell .module-heading h2 {
+    font-size: 22px;
+  }
+
+  .dashboard-shell .green-button,
+  .dashboard-shell .subtle-button,
+  .dashboard-shell .text-button,
+  .dashboard-shell .org-action-button {
+    min-height: 42px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .dashboard-shell .job-filter-form input,
+  .dashboard-shell .job-filter-form select {
+    min-height: 48px;
+    font-size: 13px;
+  }
+
+  .dashboard-shell .job-title-link {
+    font-size: 15px;
+  }
+
+  .dashboard-shell .job-result-main strong {
+    font-size: 11px;
+  }
+
+  .dashboard-shell .metric-topline,
+  .dashboard-shell .data-table,
+  .dashboard-shell .module-section,
+  .dashboard-shell .setting-card,
+  .dashboard-shell .profile-card {
+    font-size: 13px;
+  }
+
+  .dashboard-shell .dashboard-sidebar .brand-wordmark {
+    font-size: 19px;
+  }
+
+  .dashboard-shell .workspace-label,
+  .dashboard-shell .nav-section-label {
+    font-size: 11px;
+  }
+
+  .dashboard-shell .workspace-switcher strong {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .workspace-switcher small,
+  .dashboard-shell .dashboard-nav-item,
+  .dashboard-shell .logout-button {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .dashboard-nav-item {
+    min-height: 44px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .dashboard-shell .breadcrumb,
+  .dashboard-shell .profile-name {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .search-box {
+    height: 42px;
+  }
+
+  .dashboard-shell .search-box input,
+  .dashboard-shell .search-box input::placeholder {
+    font-size: 12px;
+  }
+
+  .dashboard-shell .date-line {
+    font-size: 11px;
+  }
+
+  .dashboard-shell .dashboard-welcome p,
+  .dashboard-shell .module-heading p,
+  .dashboard-shell .job-result-main > span {
+    font-size: 13px;
+  }
+
+  .dashboard-shell .dashboard-welcome h1 {
+    font-size: clamp(29px, 3vw, 38px);
+  }
+
+  .dashboard-shell .module-heading h2 {
+    font-size: 22px;
+  }
+
+  .dashboard-shell .green-button,
+  .dashboard-shell .subtle-button,
+  .dashboard-shell .text-button,
+  .dashboard-shell .org-action-button {
+    min-height: 42px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .dashboard-shell .job-filter-form input,
+  .dashboard-shell .job-filter-form select {
+    min-height: 48px;
+    font-size: 13px;
+  }
+
+  .dashboard-shell .job-title-link {
+    font-size: 15px;
+  }
+
+  .dashboard-shell .job-result-main strong {
+    font-size: 11px;
+  }
+
+  .dashboard-shell .metric-topline,
+  .dashboard-shell .data-table,
+  .dashboard-shell .module-section,
+  .dashboard-shell .setting-card,
+  .dashboard-shell .profile-card {
+    font-size: 13px;
+  }
+
   .dashboard-sidebar {
     padding: 15px 4px 12px;
   }
@@ -2717,7 +3009,8 @@ button {
     flex-wrap: wrap;
   }
 
-  .job-result-card > .subtle-button {
+  .job-result-actions {
+    width: 100%;
     margin-left: 48px;
   }
 
@@ -3223,4 +3516,2120 @@ button {
 
 .job-report .module-form {
   width: 100%;
+}
+
+.dashboard-shell .dashboard-sidebar .brand-wordmark { font-size: 19px; }
+.dashboard-shell .workspace-label,
+.dashboard-shell .nav-section-label { font-size: 11px; }
+.dashboard-shell .workspace-switcher strong { font-size: 12px; }
+.dashboard-shell .workspace-switcher small,
+.dashboard-shell .dashboard-nav-item,
+.dashboard-shell .logout-button { font-size: 12px; }
+.dashboard-shell .dashboard-nav-item {
+  min-height: 44px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.dashboard-shell .breadcrumb,
+.dashboard-shell .profile-name { font-size: 12px; }
+.dashboard-shell .search-box { height: 42px; }
+.dashboard-shell .search-box input,
+.dashboard-shell .search-box input::placeholder { font-size: 12px; }
+.dashboard-shell .date-line { font-size: 11px; }
+.dashboard-shell .dashboard-welcome p,
+.dashboard-shell .module-heading p,
+.dashboard-shell .job-result-main > span { font-size: 13px; }
+.dashboard-shell .dashboard-welcome h1 { font-size: clamp(29px, 3vw, 38px); }
+.dashboard-shell .module-heading h2 { font-size: 22px; }
+.dashboard-shell .green-button,
+.dashboard-shell .subtle-button,
+.dashboard-shell .text-button,
+.dashboard-shell .org-action-button {
+  min-height: 42px;
+  padding: 10px 16px;
+  font-size: 12px;
+}
+.dashboard-shell .job-filter-form input,
+.dashboard-shell .job-filter-form select {
+  min-height: 48px;
+  font-size: 13px;
+}
+.dashboard-shell .job-title-link { font-size: 15px; }
+.dashboard-shell .job-result-main strong { font-size: 11px; }
+.dashboard-shell .metric-topline,
+.dashboard-shell .data-table,
+.dashboard-shell .module-section,
+.dashboard-shell .setting-card,
+.dashboard-shell .profile-card { font-size: 13px; }
+
+.dashboard-shell .card-heading h2 {
+  font-size: 18px;
+}
+
+.dashboard-shell .card-heading p {
+  font-size: 12px;
+}
+
+.dashboard-shell .data-card th {
+  font-size: 11px;
+}
+
+.dashboard-shell .data-card td,
+.dashboard-shell .data-card td strong {
+  font-size: 12px;
+}
+
+.dashboard-shell .status-pill {
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.dashboard-shell .table-footer,
+.dashboard-shell .table-footer button,
+.dashboard-shell .dashboard-footer {
+  font-size: 11px;
+}
+
+/* Warm Premium authenticated workspace theme. */
+:root {
+  --theme-orange: #D95D16;
+  --theme-orange-hover: #B94A10;
+  --theme-amber: #F59E0B;
+  --theme-ruby: #B4233C;
+  --theme-canvas: #F7F8FA;
+  --theme-card: #FFFFFF;
+  --theme-secondary: #F8FAFC;
+  --theme-active: #FFF1E8;
+  --theme-text: #252B33;
+  --theme-secondary-text: #475569;
+  --theme-muted: #94A3B8;
+  --theme-border: #E5E7EB;
+  --theme-input-border: #E5E7EB;
+  --theme-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-shell,
+.onboarding-page,
+.job-details-page {
+  color: var(--theme-text);
+  background: var(--theme-canvas);
+}
+
+.dashboard-shell .dashboard-sidebar {
+  border-color: var(--theme-border);
+  background: var(--theme-card);
+}
+
+.dashboard-shell .dashboard-sidebar-intro::before {
+  background: #FED7AA;
+}
+
+.dashboard-shell .dashboard-sidebar-intro::after {
+  background: #FDBA74;
+}
+
+.dashboard-shell .brand {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .brand-symbol {
+  background: var(--theme-orange);
+}
+
+.dashboard-shell .brand-wordmark span,
+.dashboard-shell .dashboard-nav-active,
+.dashboard-shell .dashboard-nav-active .nav-icon,
+.dashboard-shell .dashboard-nav-item:hover,
+.dashboard-shell .sidebar-help button,
+.dashboard-shell .logout-button:hover {
+  color: var(--theme-orange);
+}
+
+.dashboard-shell .workspace-label,
+.dashboard-shell .nav-section-label {
+  color: var(--theme-muted);
+}
+
+.dashboard-shell .workspace-switcher,
+.dashboard-shell .sidebar-help {
+  border-color: var(--theme-border);
+}
+
+.dashboard-shell .workspace-avatar {
+  color: var(--theme-orange);
+  background: var(--theme-active);
+}
+
+.dashboard-shell .avatar-employer,
+.dashboard-shell .avatar-admin {
+  color: var(--theme-orange);
+  background: var(--theme-active);
+}
+
+.dashboard-shell .workspace-switcher strong,
+.dashboard-shell .sidebar-help strong {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .workspace-switcher small,
+.dashboard-shell .sidebar-help p {
+  color: var(--theme-muted);
+}
+
+.dashboard-shell .dashboard-nav-item {
+  color: var(--theme-secondary-text);
+}
+
+.dashboard-shell .dashboard-nav-item:hover {
+  background: var(--theme-active);
+}
+
+.dashboard-shell .dashboard-nav-active {
+  background: var(--theme-active);
+}
+
+.dashboard-shell .nav-count,
+.dashboard-shell .help-icon {
+  color: var(--theme-orange);
+  background: var(--theme-active);
+}
+
+.dashboard-shell .sidebar-help {
+  background: var(--theme-secondary);
+}
+
+.dashboard-shell .logout-button {
+  border-color: var(--theme-border);
+  color: var(--theme-muted);
+}
+
+.dashboard-shell .dashboard-topbar {
+  border-color: var(--theme-border);
+  background: var(--theme-card);
+}
+
+.dashboard-shell .breadcrumb {
+  color: var(--theme-muted);
+}
+
+.dashboard-shell .breadcrumb strong,
+.dashboard-shell .profile-name {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .search-box {
+  border-color: var(--theme-input-border);
+  color: var(--theme-muted);
+  background: var(--theme-card);
+}
+
+.dashboard-shell .search-box input {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .dashboard-welcome h1,
+.dashboard-shell .metric-value {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .dashboard-welcome p,
+.dashboard-shell .module-heading p,
+.dashboard-shell .job-result-main > span,
+.dashboard-shell .metric-topline,
+.dashboard-shell .metric-change,
+.dashboard-shell .card-heading p {
+  color: var(--theme-muted);
+}
+
+.dashboard-shell .metric-card,
+.dashboard-shell .data-card,
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card,
+.dashboard-shell .setting-card,
+.dashboard-shell .profile-card,
+.dashboard-shell .module-section,
+.dashboard-shell .candidate-preview {
+  border-color: var(--theme-border);
+  border-radius: 14px;
+  background: var(--theme-card);
+  box-shadow: var(--theme-shadow);
+}
+
+.dashboard-shell .metric-icon,
+.dashboard-shell .metric-icon-1,
+.dashboard-shell .metric-icon-2 {
+  color: var(--theme-orange);
+  background: var(--theme-active);
+}
+
+.dashboard-shell .card-heading h2,
+.dashboard-shell .module-heading h2,
+.dashboard-shell .spotlight-card h3,
+.dashboard-shell .setting-card h3,
+.dashboard-shell .profile-card h3 {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .subtle-button,
+.dashboard-shell .org-action-button {
+  border-color: var(--theme-input-border);
+  color: var(--theme-secondary-text);
+  background: var(--theme-card);
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.dashboard-shell .subtle-button:hover,
+.dashboard-shell .org-action-button:hover {
+  border-color: var(--theme-orange);
+  color: var(--theme-orange);
+  background: var(--theme-active);
+}
+
+.dashboard-shell .green-button {
+  border-color: var(--theme-orange);
+  background: var(--theme-orange);
+  box-shadow: 0 4px 10px rgba(234, 88, 12, 0.16);
+}
+
+.dashboard-shell .green-button:hover {
+  background: var(--theme-orange-hover);
+}
+
+.dashboard-shell .text-button {
+  color: var(--theme-orange);
+}
+
+.dashboard-shell .text-button:hover {
+  color: var(--theme-orange-hover);
+}
+
+.dashboard-shell .data-card th {
+  border-color: var(--theme-border);
+  color: var(--theme-secondary-text);
+  background: var(--theme-secondary);
+}
+
+.dashboard-shell .data-card td {
+  border-color: var(--theme-border);
+  color: var(--theme-secondary-text);
+  background: var(--theme-card);
+}
+
+.dashboard-shell .data-card tbody tr:hover td {
+  background: var(--theme-active);
+}
+
+.dashboard-shell .data-card td strong,
+.dashboard-shell .table-footer {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .table-footer {
+  border-color: var(--theme-border);
+}
+
+.dashboard-shell .table-footer button {
+  color: var(--theme-orange);
+}
+
+.dashboard-shell .status-pill {
+  border: 0;
+}
+
+.dashboard-shell .status-success,
+.dashboard-shell .status-selected,
+.dashboard-shell .status-shortlisted,
+.dashboard-shell .status-verified {
+  color: #16A34A;
+  background: #DCFCE7;
+}
+
+.dashboard-shell .status-interview-scheduled,
+.dashboard-shell .status-interview {
+  color: #2563EB;
+  background: #DBEAFE;
+}
+
+.dashboard-shell .status-pending,
+.dashboard-shell .status-pending-review,
+.dashboard-shell .status-needs-review,
+.dashboard-shell .status-submitted,
+.dashboard-shell .status-new {
+  color: #D97706;
+  background: #FEF3C7;
+}
+
+.dashboard-shell .status-rejected,
+.dashboard-shell .status-suspended,
+.dashboard-shell .status-flagged,
+.dashboard-shell .status-withdrawn {
+  color: #DC2626;
+  background: #FEE2E2;
+}
+
+.dashboard-shell .status-under-review,
+.dashboard-shell .status-in-review {
+  color: #7E22CE;
+  background: #F3E8FF;
+}
+
+.dashboard-shell .job-filter-form input,
+.dashboard-shell .job-filter-form select,
+.dashboard-shell .module-form input,
+.dashboard-shell .module-form select,
+.dashboard-shell .module-form textarea,
+.dashboard-shell .admin-invite-form input,
+.dashboard-shell .module-search,
+.dashboard-shell .master-settings input,
+.dashboard-shell .application-form textarea,
+.dashboard-shell .application-form input[type="file"] {
+  border-color: var(--theme-input-border);
+  color: var(--theme-text);
+  background: var(--theme-card);
+}
+
+.dashboard-shell .job-filter-form input:focus,
+.dashboard-shell .job-filter-form select:focus,
+.dashboard-shell .module-form input:focus,
+.dashboard-shell .module-form select:focus,
+.dashboard-shell .module-form textarea:focus,
+.dashboard-shell .admin-invite-form input:focus,
+.dashboard-shell .module-search:focus,
+.dashboard-shell .master-settings input:focus,
+.dashboard-shell .application-form textarea:focus,
+.dashboard-shell .application-form input[type="file"]:focus {
+  border-color: var(--theme-orange);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.14);
+}
+
+.dashboard-shell .job-result,
+.dashboard-shell .job-details-card {
+  border-color: var(--theme-border);
+  background: var(--theme-card);
+  box-shadow: var(--theme-shadow);
+}
+
+.dashboard-shell .job-title-link,
+.dashboard-shell .job-result-main strong {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .job-title-link:hover {
+  color: var(--theme-orange);
+}
+
+.onboarding-page,
+.job-details-page {
+  padding-top: 32px;
+}
+
+.onboarding-card,
+.job-details-card {
+  border-color: var(--theme-border);
+  border-radius: 14px;
+  background: var(--theme-card);
+  box-shadow: var(--theme-shadow);
+}
+
+.onboarding-card h1,
+.job-details-head h1,
+.job-details-card section h2 {
+  color: var(--theme-text);
+}
+
+.onboarding-card > p,
+.job-details-head p,
+.job-details-card section > p,
+.job-details-card li {
+  color: var(--theme-secondary-text);
+}
+
+.onboarding-form input,
+.onboarding-form select,
+.onboarding-form textarea,
+.application-form textarea,
+.application-form input[type="file"] {
+  border-color: var(--theme-input-border);
+  color: var(--theme-text);
+  background: var(--theme-card);
+}
+
+.onboarding-form input:focus,
+.onboarding-form select:focus,
+.onboarding-form textarea:focus,
+.application-form textarea:focus,
+.application-form input[type="file"]:focus {
+  border-color: var(--theme-orange);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.14);
+}
+
+.onboarding-form .login-submit {
+  border-color: var(--theme-orange);
+  background: var(--theme-orange);
+}
+
+.onboarding-form .login-submit:hover {
+  background: var(--theme-orange-hover);
+}
+
+.onboarding-icon {
+  color: var(--theme-orange);
+}
+
+.onboarding-review-note {
+  color: var(--theme-secondary-text);
+  background: var(--theme-secondary);
+}
+
+.onboarding-review-note svg {
+  color: var(--theme-orange);
+}
+
+.job-details-page .green-button {
+  border-color: var(--theme-orange);
+  background: var(--theme-orange);
+  box-shadow: 0 4px 10px rgba(234, 88, 12, 0.16);
+}
+
+.job-details-page .green-button:hover {
+  background: var(--theme-orange-hover);
+}
+
+.job-details-page .subtle-button {
+  border-color: var(--theme-input-border);
+  color: var(--theme-secondary-text);
+  background: var(--theme-card);
+}
+
+.job-details-page .subtle-button:hover,
+.job-details-page .text-button {
+  color: var(--theme-orange);
+}
+
+.job-details-page .application-form {
+  border-color: var(--theme-border);
+  background: var(--theme-secondary);
+}
+
+.job-details-page .application-form label {
+  color: var(--theme-text);
+}
+
+.job-details-page .job-details-meta span {
+  color: var(--theme-secondary-text);
+  background: var(--theme-secondary);
+}
+
+.dashboard-shell .dashboard-nav {
+  gap: 6px;
+}
+
+.dashboard-shell .dashboard-nav-item {
+  font-weight: 500;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.dashboard-shell .dashboard-nav-active {
+  font-weight: 600;
+}
+
+.dashboard-shell .metric-card {
+  min-height: 126px;
+  padding: 18px;
+}
+
+.dashboard-shell .metric-value {
+  font-size: 28px;
+}
+
+.dashboard-shell .metric-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card {
+  box-shadow: none;
+}
+
+.dashboard-shell .spotlight-card {
+  background: var(--theme-card);
+}
+
+.dashboard-shell .spotlight-card p,
+.dashboard-shell .progress-card p {
+  color: var(--theme-secondary-text);
+  font-size: 11px;
+}
+
+.dashboard-shell .spotlight-card button,
+.dashboard-shell .progress-card button {
+  border-color: var(--theme-border);
+  color: var(--theme-orange);
+  font-size: 11px;
+}
+
+.dashboard-shell .progress-heading > div span {
+  color: var(--theme-muted);
+  font-size: 11px;
+}
+
+.dashboard-shell .progress-heading > div strong {
+  color: var(--theme-text);
+  font-size: 25px;
+}
+
+.dashboard-shell .progress-track {
+  background: #E2E8F0;
+}
+
+.dashboard-shell .progress-track span {
+  background: var(--theme-orange);
+}
+
+.dashboard-shell .recommended-job {
+  border-color: var(--theme-border);
+  color: var(--theme-orange);
+}
+
+.dashboard-shell .recommended-job strong {
+  color: var(--theme-text);
+}
+
+.dashboard-shell .recommended-job span {
+  color: var(--theme-muted);
+}
+
+.dashboard-shell .data-card th {
+  background: #F8FAFC;
+}
+
+.dashboard-shell .data-card td {
+  min-height: 52px;
+}
+
+.dashboard-shell .data-card tbody tr:hover td {
+  background: #FFF8F3;
+}
+
+.dashboard-shell .dashboard-footer {
+  color: var(--theme-muted);
+}
+
+/* Midnight Aurora theme for every public and authenticated surface. */
+:root {
+  --aurora-bg: #0B0A12;
+  --aurora-sidebar: #100E18;
+  --aurora-navbar: #13111D;
+  --aurora-card: #1C1929;
+  --aurora-elevated: #252036;
+  --aurora-input: #171421;
+  --aurora-purple: #8B5CF6;
+  --aurora-purple-hover: #7C3AED;
+  --aurora-secondary: #A855F7;
+  --aurora-lavender: #C084FC;
+  --aurora-pink: #E879F9;
+  --aurora-text: #F8FAFC;
+  --aurora-secondary-text: #A1A1AA;
+  --aurora-muted: #71717A;
+  --aurora-border: #302A40;
+  --aurora-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+
+body,
+#root,
+.dashboard-shell,
+.onboarding-page,
+.job-details-page {
+  color: var(--aurora-text);
+  background: var(--aurora-bg);
+}
+
+.dashboard-shell {
+  background: var(--aurora-bg);
+}
+
+.dashboard-shell .dashboard-sidebar {
+  border-color: var(--aurora-border);
+  background: var(--aurora-sidebar);
+}
+
+.dashboard-shell .dashboard-sidebar-intro::before {
+  background: #4C1D95;
+}
+
+.dashboard-shell .dashboard-sidebar-intro::after {
+  background: #7C3AED;
+}
+
+.dashboard-shell .brand,
+.dashboard-shell .brand-wordmark,
+.dashboard-shell .workspace-switcher strong,
+.dashboard-shell .sidebar-help strong,
+.dashboard-shell .breadcrumb strong,
+.dashboard-shell .profile-name,
+.dashboard-shell .dashboard-welcome h1,
+.dashboard-shell .metric-value,
+.dashboard-shell .card-heading h2,
+.dashboard-shell .module-heading h2,
+.dashboard-shell .spotlight-card h3,
+.dashboard-shell .setting-card h3,
+.dashboard-shell .profile-card h3 {
+  color: var(--aurora-text);
+}
+
+.dashboard-shell .brand-symbol {
+  background: linear-gradient(135deg, var(--aurora-purple-hover), var(--aurora-pink));
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.32);
+}
+
+.dashboard-shell .brand-wordmark span,
+.dashboard-shell .dashboard-nav-active,
+.dashboard-shell .dashboard-nav-active .nav-icon,
+.dashboard-shell .dashboard-nav-item:hover,
+.dashboard-shell .sidebar-help button,
+.dashboard-shell .logout-button:hover,
+.dashboard-shell .text-button,
+.dashboard-shell .text-button:hover,
+.dashboard-shell .table-footer button,
+.dashboard-shell .job-title-link:hover {
+  color: var(--aurora-lavender);
+}
+
+.dashboard-shell .workspace-label,
+.dashboard-shell .nav-section-label,
+.dashboard-shell .workspace-switcher small,
+.dashboard-shell .sidebar-help p,
+.dashboard-shell .breadcrumb,
+.dashboard-shell .dashboard-welcome p,
+.dashboard-shell .module-heading p,
+.dashboard-shell .metric-topline,
+.dashboard-shell .metric-change,
+.dashboard-shell .card-heading p,
+.dashboard-shell .dashboard-footer,
+.dashboard-shell .job-result-main > span {
+  color: var(--aurora-muted);
+}
+
+.dashboard-shell .workspace-switcher,
+.dashboard-shell .sidebar-help,
+.dashboard-shell .logout-button,
+.dashboard-shell .dashboard-topbar,
+.dashboard-shell .data-card th,
+.dashboard-shell .data-card td,
+.dashboard-shell .table-footer,
+.dashboard-shell .spotlight-card button,
+.dashboard-shell .progress-card button {
+  border-color: var(--aurora-border);
+}
+
+.dashboard-shell .workspace-switcher {
+  background: var(--aurora-card);
+}
+
+.dashboard-shell .workspace-avatar,
+.dashboard-shell .avatar-employer,
+.dashboard-shell .avatar-admin,
+.dashboard-shell .nav-count,
+.dashboard-shell .help-icon,
+.dashboard-shell .metric-icon,
+.dashboard-shell .metric-icon-1,
+.dashboard-shell .metric-icon-2 {
+  color: var(--aurora-lavender);
+  background: rgba(139, 92, 246, 0.16);
+}
+
+.dashboard-shell .dashboard-nav-item {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .dashboard-nav-item:hover,
+.dashboard-shell .dashboard-nav-active {
+  background: rgba(139, 92, 246, 0.14);
+}
+
+.dashboard-shell .sidebar-help {
+  background: var(--aurora-card);
+}
+
+.dashboard-shell .logout-button {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .dashboard-topbar {
+  background: var(--aurora-navbar);
+}
+
+.dashboard-shell .search-box {
+  border-color: var(--aurora-border);
+  color: var(--aurora-muted);
+  background: var(--aurora-input);
+}
+
+.dashboard-shell .search-box input,
+.dashboard-shell .search-box input::placeholder {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .metric-card,
+.dashboard-shell .data-card,
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card,
+.dashboard-shell .setting-card,
+.dashboard-shell .profile-card,
+.dashboard-shell .module-section,
+.dashboard-shell .candidate-preview,
+.dashboard-shell .job-result {
+  border-color: var(--aurora-border);
+  border-radius: 16px;
+  background: var(--aurora-card);
+  box-shadow: var(--aurora-shadow);
+}
+
+.dashboard-shell .data-card th {
+  color: var(--aurora-secondary-text);
+  background: var(--aurora-elevated);
+}
+
+.dashboard-shell .data-card td {
+  color: var(--aurora-secondary-text);
+  background: var(--aurora-card);
+}
+
+.dashboard-shell .data-card td strong,
+.dashboard-shell .job-title-link,
+.dashboard-shell .recommended-job strong {
+  color: var(--aurora-text);
+}
+
+.dashboard-shell .data-card tbody tr:hover td {
+  background: rgba(139, 92, 246, 0.09);
+}
+
+.dashboard-shell .green-button,
+.job-details-page .green-button,
+.onboarding-form .login-submit {
+  border-color: var(--aurora-purple);
+  background: linear-gradient(115deg, var(--aurora-purple-hover), var(--aurora-secondary), var(--aurora-pink));
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.25);
+}
+
+.dashboard-shell .green-button:hover,
+.job-details-page .green-button:hover,
+.onboarding-form .login-submit:hover {
+  background: linear-gradient(115deg, #6D28D9, var(--aurora-purple-hover), var(--aurora-secondary));
+  box-shadow: 0 10px 26px rgba(139, 92, 246, 0.34);
+}
+
+.dashboard-shell .subtle-button,
+.dashboard-shell .org-action-button,
+.job-details-page .subtle-button {
+  border-color: var(--aurora-border);
+  color: var(--aurora-secondary-text);
+  background: var(--aurora-elevated);
+}
+
+.dashboard-shell .subtle-button:hover,
+.dashboard-shell .org-action-button:hover,
+.job-details-page .subtle-button:hover {
+  border-color: var(--aurora-purple);
+  color: var(--aurora-lavender);
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.dashboard-shell .status-success,
+.dashboard-shell .status-selected,
+.dashboard-shell .status-shortlisted,
+.dashboard-shell .status-verified {
+  color: #34D399;
+  background: rgba(52, 211, 153, 0.14);
+}
+
+.dashboard-shell .status-interview-scheduled,
+.dashboard-shell .status-interview {
+  color: #60A5FA;
+  background: rgba(96, 165, 250, 0.14);
+}
+
+.dashboard-shell .status-pending,
+.dashboard-shell .status-pending-review,
+.dashboard-shell .status-needs-review,
+.dashboard-shell .status-submitted,
+.dashboard-shell .status-new {
+  color: #FBBF24;
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.dashboard-shell .status-rejected,
+.dashboard-shell .status-suspended,
+.dashboard-shell .status-flagged,
+.dashboard-shell .status-withdrawn {
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.14);
+}
+
+.dashboard-shell .status-under-review,
+.dashboard-shell .status-in-review {
+  color: var(--aurora-lavender);
+  background: rgba(192, 132, 252, 0.14);
+}
+
+.dashboard-shell .progress-track {
+  background: var(--aurora-elevated);
+}
+
+.dashboard-shell .progress-track span {
+  background: linear-gradient(90deg, var(--aurora-purple), var(--aurora-pink));
+}
+
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card {
+  box-shadow: none;
+}
+
+.dashboard-shell .spotlight-card button,
+.dashboard-shell .progress-card button,
+.dashboard-shell .recommended-job {
+  color: var(--aurora-lavender);
+}
+
+.dashboard-shell .recommended-job span,
+.dashboard-shell .spotlight-card p,
+.dashboard-shell .progress-card p {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .job-filter-form input,
+.dashboard-shell .job-filter-form select,
+.dashboard-shell .module-form input,
+.dashboard-shell .module-form select,
+.dashboard-shell .module-form textarea,
+.dashboard-shell .admin-invite-form input,
+.dashboard-shell .module-search,
+.dashboard-shell .master-settings input,
+.dashboard-shell .application-form textarea,
+.dashboard-shell .application-form input[type="file"] {
+  border-color: var(--aurora-border);
+  color: var(--aurora-text);
+  background: var(--aurora-input);
+}
+
+.dashboard-shell .job-filter-form input:focus,
+.dashboard-shell .job-filter-form select:focus,
+.dashboard-shell .module-form input:focus,
+.dashboard-shell .module-form select:focus,
+.dashboard-shell .module-form textarea:focus,
+.dashboard-shell .admin-invite-form input:focus,
+.dashboard-shell .module-search:focus,
+.dashboard-shell .master-settings input:focus,
+.dashboard-shell .application-form textarea:focus,
+.dashboard-shell .application-form input[type="file"]:focus {
+  border-color: var(--aurora-lavender);
+  box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.18);
+}
+
+.dashboard-shell .job-result-main strong,
+.dashboard-shell .job-details-card,
+.dashboard-shell .application-form {
+  color: var(--aurora-text);
+}
+
+.onboarding-page,
+.job-details-page {
+  background: var(--aurora-bg);
+}
+
+.onboarding-card,
+.job-details-card {
+  border-color: var(--aurora-border);
+  border-radius: 16px;
+  background: var(--aurora-card);
+  box-shadow: var(--aurora-shadow);
+}
+
+.onboarding-card h1,
+.job-details-head h1,
+.job-details-card section h2 {
+  color: var(--aurora-text);
+}
+
+.onboarding-card > p,
+.job-details-head p,
+.job-details-card section > p,
+.job-details-card li {
+  color: var(--aurora-secondary-text);
+}
+
+.onboarding-form input,
+.onboarding-form select,
+.onboarding-form textarea,
+.application-form textarea,
+.application-form input[type="file"] {
+  border-color: var(--aurora-border);
+  color: var(--aurora-text);
+  background: var(--aurora-input);
+}
+
+.onboarding-form input:focus,
+.onboarding-form select:focus,
+.onboarding-form textarea:focus,
+.application-form textarea:focus,
+.application-form input[type="file"]:focus {
+  border-color: var(--aurora-lavender);
+  box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.18);
+}
+
+.onboarding-review-note,
+.job-details-page .application-form,
+.job-details-page .job-details-meta span {
+  color: var(--aurora-secondary-text);
+  background: var(--aurora-elevated);
+}
+
+.onboarding-icon,
+.onboarding-review-note svg,
+.job-details-page .text-button {
+  color: var(--aurora-lavender);
+}
+
+/* Public authentication surfaces retain their functionality but use the same system. */
+.login-page {
+  background: var(--aurora-bg) !important;
+}
+
+.login-page::before {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(124, 58, 237, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 78%, rgba(232, 121, 249, 0.16), transparent 30%),
+    var(--aurora-bg);
+}
+
+.login-page .welcome-panel,
+.login-page .login-panel {
+  background: transparent !important;
+}
+
+.login-page .brand {
+  color: var(--aurora-text);
+}
+
+.login-page .brand-symbol {
+  background: linear-gradient(135deg, var(--aurora-purple-hover), var(--aurora-pink));
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.35);
+}
+
+.login-page .brand-wordmark span,
+.login-page .welcome-kicker,
+.login-page .login-eyebrow,
+.login-page .login-panel-top a,
+.login-page .super-admin-link a {
+  color: var(--aurora-lavender);
+}
+
+.login-page .welcome-kicker,
+.login-page .welcome-note,
+.login-page .role-option,
+.login-page .admin-note {
+  border-color: var(--aurora-border);
+  background: rgba(28, 25, 41, 0.88);
+}
+
+.login-page .welcome-kicker,
+.login-page .welcome-content h1,
+.login-page .login-heading h2,
+.login-page .welcome-note strong,
+.login-page .role-option-copy strong {
+  color: var(--aurora-text);
+}
+
+.login-page .welcome-content > p,
+.login-page .welcome-note small,
+.login-page .login-panel-top,
+.login-page .login-heading p,
+.login-page .role-option-copy small,
+.login-page .auth-privacy-note,
+.login-page .terms-copy {
+  color: var(--aurora-secondary-text);
+}
+
+.login-page .welcome-dot {
+  background: var(--aurora-pink);
+  box-shadow: 0 0 0 4px rgba(232, 121, 249, 0.16);
+}
+
+.login-page .welcome-note-icon,
+.login-page .role-option-icon {
+  color: var(--aurora-lavender);
+  background: rgba(139, 92, 246, 0.16);
+}
+
+.login-page .role-option {
+  color: var(--aurora-text);
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.login-page .role-option:hover {
+  border-color: var(--aurora-secondary);
+  transform: translateY(-1px);
+}
+
+.login-page .role-option-active {
+  border-color: var(--aurora-purple);
+  background: rgba(139, 92, 246, 0.14);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2), 0 0 24px rgba(139, 92, 246, 0.14);
+}
+
+.login-page .role-radio {
+  border-color: var(--aurora-muted);
+}
+
+.login-page .role-option-active .role-radio {
+  border-color: var(--aurora-lavender);
+}
+
+.login-page .role-option-active .role-radio::after {
+  background: var(--aurora-lavender);
+}
+
+.login-page .admin-note {
+  color: var(--aurora-secondary-text);
+}
+
+.login-page .admin-note span {
+  color: var(--aurora-lavender);
+}
+
+.login-page .login-submit,
+.login-page .google-button {
+  border-color: var(--aurora-purple);
+  color: white;
+  background: linear-gradient(115deg, var(--aurora-purple-hover), var(--aurora-secondary), var(--aurora-pink));
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.24);
+}
+
+.login-page .login-submit:hover,
+.login-page .google-button:hover {
+  background: linear-gradient(115deg, #6D28D9, var(--aurora-purple-hover), var(--aurora-secondary));
+  box-shadow: 0 10px 28px rgba(139, 92, 246, 0.34);
+}
+
+.login-page .login-panel-top a:hover,
+.login-page .super-admin-link a:hover,
+.login-page .terms-copy a:hover {
+  color: var(--aurora-pink);
+}
+
+.login-page .auth-error {
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.12);
+}
+
+.login-page .loading-message {
+  color: var(--aurora-lavender);
+  background: rgba(192, 132, 252, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page .role-option,
+  .dashboard-shell .green-button,
+  .dashboard-shell .subtle-button,
+  .dashboard-shell .org-action-button {
+    transition: none;
+  }
+}
+
+/* Emerald Glass unified theme. */
+:root {
+  --aurora-bg: #080D0C;
+  --aurora-sidebar: #0B1411;
+  --aurora-navbar: #101B18;
+  --aurora-card: #172823;
+  --aurora-elevated: #203B32;
+  --aurora-input: #101B18;
+  --aurora-purple: #10B981;
+  --aurora-purple-hover: #059669;
+  --aurora-secondary: #14B8A6;
+  --aurora-lavender: #6EE7B7;
+  --aurora-pink: #A7F3D0;
+  --aurora-text: #F8FAFC;
+  --aurora-secondary-text: #B6C5BE;
+  --aurora-muted: #84958D;
+  --aurora-border: #29483D;
+  --aurora-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
+}
+
+body,
+#root,
+.dashboard-shell,
+.onboarding-page,
+.job-details-page {
+  color: var(--aurora-text);
+  background: var(--aurora-bg);
+}
+
+.dashboard-shell .dashboard-sidebar {
+  background: var(--aurora-sidebar);
+  border-color: var(--aurora-border);
+}
+
+.dashboard-shell .dashboard-sidebar-intro::before {
+  background: #064E3B;
+}
+
+.dashboard-shell .dashboard-sidebar-intro::after {
+  background: #059669;
+}
+
+.dashboard-shell .brand-symbol {
+  background: linear-gradient(135deg, #059669, #14B8A6);
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.3);
+}
+
+.dashboard-shell .brand,
+.dashboard-shell .brand-wordmark,
+.dashboard-shell .workspace-switcher strong,
+.dashboard-shell .sidebar-help strong,
+.dashboard-shell .breadcrumb strong,
+.dashboard-shell .profile-name,
+.dashboard-shell .dashboard-welcome h1,
+.dashboard-shell .metric-value,
+.dashboard-shell .card-heading h2,
+.dashboard-shell .module-heading h2,
+.dashboard-shell .spotlight-card h3,
+.dashboard-shell .setting-card h3,
+.dashboard-shell .profile-card h3 {
+  color: var(--aurora-text);
+}
+
+.dashboard-shell .brand-wordmark span,
+.dashboard-shell .dashboard-nav-active,
+.dashboard-shell .dashboard-nav-active .nav-icon,
+.dashboard-shell .dashboard-nav-item:hover,
+.dashboard-shell .sidebar-help button,
+.dashboard-shell .logout-button:hover,
+.dashboard-shell .text-button,
+.dashboard-shell .text-button:hover,
+.dashboard-shell .table-footer button,
+.dashboard-shell .job-title-link:hover {
+  color: var(--aurora-lavender);
+}
+
+.dashboard-shell .workspace-label,
+.dashboard-shell .nav-section-label,
+.dashboard-shell .workspace-switcher small,
+.dashboard-shell .sidebar-help p,
+.dashboard-shell .breadcrumb,
+.dashboard-shell .dashboard-welcome p,
+.dashboard-shell .module-heading p,
+.dashboard-shell .metric-topline,
+.dashboard-shell .metric-change,
+.dashboard-shell .card-heading p,
+.dashboard-shell .dashboard-footer,
+.dashboard-shell .job-result-main > span {
+  color: var(--aurora-muted);
+}
+
+.dashboard-shell .workspace-switcher,
+.dashboard-shell .sidebar-help,
+.dashboard-shell .logout-button,
+.dashboard-shell .dashboard-topbar,
+.dashboard-shell .data-card th,
+.dashboard-shell .data-card td,
+.dashboard-shell .table-footer,
+.dashboard-shell .spotlight-card button,
+.dashboard-shell .progress-card button {
+  border-color: var(--aurora-border);
+}
+
+.dashboard-shell .workspace-switcher,
+.dashboard-shell .sidebar-help,
+.dashboard-shell .metric-card,
+.dashboard-shell .data-card,
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card,
+.dashboard-shell .setting-card,
+.dashboard-shell .profile-card,
+.dashboard-shell .module-section,
+.dashboard-shell .candidate-preview,
+.dashboard-shell .job-result {
+  background: rgba(23, 40, 35, 0.78);
+  border-color: rgba(110, 231, 183, 0.16);
+  border-radius: 16px;
+  box-shadow: var(--aurora-shadow);
+}
+
+.dashboard-shell .metric-card,
+.dashboard-shell .data-card,
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card,
+.login-page .welcome-note,
+.login-page .role-option,
+.login-page .admin-note {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.dashboard-shell .workspace-avatar,
+.dashboard-shell .avatar-employer,
+.dashboard-shell .avatar-admin,
+.dashboard-shell .nav-count,
+.dashboard-shell .help-icon,
+.dashboard-shell .metric-icon,
+.dashboard-shell .metric-icon-1,
+.dashboard-shell .metric-icon-2 {
+  color: var(--aurora-lavender);
+  background: rgba(110, 231, 183, 0.14);
+}
+
+.dashboard-shell .dashboard-nav-item {
+  color: var(--aurora-secondary-text);
+  font-weight: 500;
+}
+
+.dashboard-shell .dashboard-nav-item:hover,
+.dashboard-shell .dashboard-nav-active {
+  color: var(--aurora-lavender);
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.dashboard-shell .dashboard-topbar {
+  background: var(--aurora-navbar);
+}
+
+.dashboard-shell .search-box {
+  border-color: var(--aurora-border);
+  color: var(--aurora-muted);
+  background: var(--aurora-input);
+}
+
+.dashboard-shell .search-box input,
+.dashboard-shell .search-box input::placeholder {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .data-card th {
+  color: var(--aurora-secondary-text);
+  background: rgba(32, 59, 50, 0.76);
+}
+
+.dashboard-shell .data-card td {
+  color: var(--aurora-secondary-text);
+  background: transparent;
+  border-color: rgba(110, 231, 183, 0.12);
+}
+
+.dashboard-shell .data-card td strong,
+.dashboard-shell .job-title-link,
+.dashboard-shell .recommended-job strong {
+  color: var(--aurora-text);
+}
+
+.dashboard-shell .data-card tbody tr:hover td {
+  background: rgba(16, 185, 129, 0.09);
+}
+
+.dashboard-shell .green-button,
+.job-details-page .green-button,
+.onboarding-form .login-submit {
+  border-color: var(--aurora-purple);
+  background: linear-gradient(115deg, #059669, #10B981, #14B8A6);
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.22);
+}
+
+.dashboard-shell .green-button:hover,
+.job-details-page .green-button:hover,
+.onboarding-form .login-submit:hover {
+  background: linear-gradient(115deg, #047857, #059669, #0F766E);
+  box-shadow: 0 10px 26px rgba(16, 185, 129, 0.32);
+}
+
+.dashboard-shell .subtle-button,
+.dashboard-shell .org-action-button,
+.job-details-page .subtle-button {
+  border-color: var(--aurora-border);
+  color: var(--aurora-secondary-text);
+  background: var(--aurora-elevated);
+}
+
+.dashboard-shell .subtle-button:hover,
+.dashboard-shell .org-action-button:hover,
+.job-details-page .subtle-button:hover {
+  border-color: var(--aurora-secondary);
+  color: var(--aurora-lavender);
+  background: rgba(20, 184, 166, 0.14);
+}
+
+.dashboard-shell .status-success,
+.dashboard-shell .status-selected,
+.dashboard-shell .status-shortlisted,
+.dashboard-shell .status-verified {
+  color: #34D399;
+  background: rgba(52, 211, 153, 0.14);
+}
+
+.dashboard-shell .status-interview-scheduled,
+.dashboard-shell .status-interview {
+  color: #60A5FA;
+  background: rgba(96, 165, 250, 0.14);
+}
+
+.dashboard-shell .status-pending,
+.dashboard-shell .status-pending-review,
+.dashboard-shell .status-needs-review,
+.dashboard-shell .status-submitted,
+.dashboard-shell .status-new {
+  color: #FBBF24;
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.dashboard-shell .status-rejected,
+.dashboard-shell .status-suspended,
+.dashboard-shell .status-flagged,
+.dashboard-shell .status-withdrawn {
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.14);
+}
+
+.dashboard-shell .status-under-review,
+.dashboard-shell .status-in-review {
+  color: #8B7CF6;
+  background: rgba(139, 124, 246, 0.16);
+}
+
+.dashboard-shell .progress-track {
+  background: var(--aurora-elevated);
+}
+
+.dashboard-shell .progress-track span {
+  background: linear-gradient(90deg, var(--aurora-purple), var(--aurora-secondary));
+}
+
+.dashboard-shell .spotlight-card,
+.dashboard-shell .progress-card {
+  box-shadow: none;
+}
+
+.dashboard-shell .spotlight-card button,
+.dashboard-shell .progress-card button,
+.dashboard-shell .recommended-job {
+  color: var(--aurora-lavender);
+}
+
+.dashboard-shell .recommended-job span,
+.dashboard-shell .spotlight-card p,
+.dashboard-shell .progress-card p {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .job-filter-form input,
+.dashboard-shell .job-filter-form select,
+.dashboard-shell .module-form input,
+.dashboard-shell .module-form select,
+.dashboard-shell .module-form textarea,
+.dashboard-shell .admin-invite-form input,
+.dashboard-shell .module-search,
+.dashboard-shell .master-settings input,
+.dashboard-shell .application-form textarea,
+.dashboard-shell .application-form input[type="file"] {
+  border-color: var(--aurora-border);
+  color: var(--aurora-text);
+  background: var(--aurora-input);
+}
+
+.dashboard-shell .job-filter-form input:focus,
+.dashboard-shell .job-filter-form select:focus,
+.dashboard-shell .module-form input:focus,
+.dashboard-shell .module-form select:focus,
+.dashboard-shell .module-form textarea:focus,
+.dashboard-shell .admin-invite-form input:focus,
+.dashboard-shell .module-search:focus,
+.dashboard-shell .master-settings input:focus,
+.dashboard-shell .application-form textarea:focus,
+.dashboard-shell .application-form input[type="file"]:focus {
+  border-color: var(--aurora-lavender);
+  box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.18);
+}
+
+.onboarding-page,
+.job-details-page {
+  background: var(--aurora-bg);
+}
+
+.onboarding-card,
+.job-details-card {
+  border-color: var(--aurora-border);
+  border-radius: 16px;
+  background: rgba(23, 40, 35, 0.86);
+  box-shadow: var(--aurora-shadow);
+}
+
+.onboarding-card h1,
+.job-details-head h1,
+.job-details-card section h2 {
+  color: var(--aurora-text);
+}
+
+.onboarding-card > p,
+.job-details-head p,
+.job-details-card section > p,
+.job-details-card li {
+  color: var(--aurora-secondary-text);
+}
+
+.onboarding-form input,
+.onboarding-form select,
+.onboarding-form textarea,
+.application-form textarea,
+.application-form input[type="file"] {
+  border-color: var(--aurora-border);
+  color: var(--aurora-text);
+  background: var(--aurora-input);
+}
+
+.onboarding-form input:focus,
+.onboarding-form select:focus,
+.onboarding-form textarea:focus,
+.application-form textarea:focus,
+.application-form input[type="file"]:focus {
+  border-color: var(--aurora-lavender);
+  box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.18);
+}
+
+.onboarding-review-note,
+.job-details-page .application-form,
+.job-details-page .job-details-meta span {
+  color: var(--aurora-secondary-text);
+  background: var(--aurora-elevated);
+}
+
+.onboarding-icon,
+.onboarding-review-note svg,
+.job-details-page .text-button {
+  color: var(--aurora-lavender);
+}
+
+.login-page {
+  background: var(--aurora-bg) !important;
+}
+
+.login-page::before {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(16, 185, 129, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 78%, rgba(20, 184, 166, 0.16), transparent 30%),
+    var(--aurora-bg);
+}
+
+.login-page .welcome-panel,
+.login-page .login-panel {
+  background: transparent !important;
+}
+
+.login-page .brand {
+  color: var(--aurora-text);
+}
+
+.login-page .brand-symbol {
+  background: linear-gradient(135deg, #059669, #14B8A6);
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.32);
+}
+
+.login-page .brand-wordmark span,
+.login-page .welcome-kicker,
+.login-page .login-eyebrow,
+.login-page .login-panel-top a,
+.login-page .super-admin-link a {
+  color: var(--aurora-lavender);
+}
+
+.login-page .welcome-kicker,
+.login-page .welcome-note,
+.login-page .role-option,
+.login-page .admin-note {
+  border-color: rgba(110, 231, 183, 0.16);
+  background: rgba(23, 40, 35, 0.78);
+}
+
+.login-page .welcome-kicker,
+.login-page .welcome-content h1,
+.login-page .login-heading h2,
+.login-page .welcome-note strong,
+.login-page .role-option-copy strong {
+  color: var(--aurora-text);
+}
+
+.login-page .welcome-content > p,
+.login-page .welcome-note small,
+.login-page .login-panel-top,
+.login-page .login-heading p,
+.login-page .role-option-copy small,
+.login-page .auth-privacy-note,
+.login-page .terms-copy {
+  color: var(--aurora-secondary-text);
+}
+
+.login-page .welcome-dot {
+  background: var(--aurora-lavender);
+  box-shadow: 0 0 0 4px rgba(110, 231, 183, 0.16);
+}
+
+.login-page .welcome-note-icon,
+.login-page .role-option-icon {
+  color: var(--aurora-lavender);
+  background: rgba(110, 231, 183, 0.14);
+}
+
+.login-page .role-option {
+  color: var(--aurora-text);
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.login-page .role-option:hover {
+  border-color: var(--aurora-secondary);
+  transform: translateY(-1px);
+}
+
+.login-page .role-option-active {
+  border-color: var(--aurora-purple);
+  background: rgba(16, 185, 129, 0.14);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2), 0 0 24px rgba(16, 185, 129, 0.14);
+}
+
+.login-page .role-radio {
+  border-color: var(--aurora-muted);
+}
+
+.login-page .role-option-active .role-radio {
+  border-color: var(--aurora-lavender);
+}
+
+.login-page .role-option-active .role-radio::after {
+  background: var(--aurora-lavender);
+}
+
+.login-page .admin-note {
+  color: var(--aurora-secondary-text);
+}
+
+.login-page .admin-note span {
+  color: var(--aurora-lavender);
+}
+
+.login-page .login-submit,
+.login-page .google-button {
+  border-color: var(--aurora-purple);
+  color: white;
+  background: linear-gradient(115deg, #059669, #10B981, #14B8A6);
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.22);
+}
+
+.login-page .login-submit:hover,
+.login-page .google-button:hover {
+  background: linear-gradient(115deg, #047857, #059669, #0F766E);
+  box-shadow: 0 10px 28px rgba(16, 185, 129, 0.32);
+}
+
+.login-page .login-panel-top a:hover,
+.login-page .super-admin-link a:hover,
+.login-page .terms-copy a:hover {
+  color: var(--aurora-pink);
+}
+
+.login-page .auth-error {
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.12);
+}
+
+.login-page .loading-message {
+  color: var(--aurora-lavender);
+  background: rgba(110, 231, 183, 0.12);
+}
+
+/* Stack authentication content vertically instead of using a split screen. */
+.login-page {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 100vh;
+  overflow: auto;
+}
+
+.login-page .welcome-panel,
+.login-page .login-panel {
+  flex: none;
+  width: 100%;
+  min-height: auto;
+}
+
+.login-page .welcome-panel {
+  padding: 48px clamp(24px, 8vw, 110px) 24px;
+}
+
+.login-page .welcome-panel > .brand {
+  align-self: center;
+}
+
+.login-page .welcome-content {
+  width: 100%;
+  margin: 0;
+  padding: 56px 0 34px;
+  text-align: center;
+}
+
+.login-page .welcome-content h1 {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-page .welcome-content > p {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-page .welcome-note {
+  margin-top: 28px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-page .welcome-footer {
+  width: 100%;
+  margin: 0;
+  justify-content: center;
+  text-align: center;
+}
+
+.login-page .login-panel {
+  padding: 0 clamp(24px, 8vw, 110px) 60px;
+}
+
+.login-page .login-panel-top {
+  width: 100%;
+  margin: 0;
+  justify-content: center;
+  text-align: center;
+}
+
+.login-page .login-box {
+  width: 100%;
+  margin: 0;
+  padding: 34px 0 0;
+}
+
+.login-page .login-heading {
+  text-align: center;
+}
+
+.login-page .role-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.login-page .role-option {
+  min-height: 118px;
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.login-page .role-option-icon {
+  flex-basis: 44px;
+  height: 44px;
+}
+
+.login-page .role-option-copy strong {
+  font-size: 15px;
+}
+
+.login-page .role-option-copy small {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.login-page .super-admin-link,
+.login-page .google-login-area,
+.login-page .auth-privacy-note,
+.login-page .terms-copy {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .login-page .welcome-panel {
+    padding: 30px 20px 18px;
+  }
+
+  .login-page .welcome-content {
+    padding: 38px 0 24px;
+  }
+
+  .login-page .welcome-content h1 {
+    font-size: clamp(36px, 12vw, 54px);
+  }
+
+  .login-page .welcome-footer {
+    font-size: 10px;
+  }
+
+  .login-page .login-panel {
+    padding: 0 20px 38px;
+  }
+
+  .login-page .login-panel-top {
+    justify-content: center;
+  }
+
+  .login-page .login-box {
+    padding-top: 26px;
+  }
+
+  .login-page .role-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Professional stacked authentication layout. */
+.login-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.login-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  min-height: 84px;
+  padding: 18px clamp(24px, 5vw, 60px);
+  border-bottom: 1px solid rgba(110, 231, 183, 0.12);
+  background: rgba(8, 13, 12, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.login-header-community {
+  color: var(--aurora-secondary-text);
+  font-size: 13px;
+  text-align: right;
+}
+
+.login-header-community a {
+  color: var(--aurora-lavender);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.login-header-community a:hover {
+  color: var(--aurora-pink);
+}
+
+.login-page .welcome-panel,
+.login-page .login-panel {
+  display: block;
+  width: 100%;
+  min-height: auto;
+  padding-left: clamp(24px, 8vw, 110px);
+  padding-right: clamp(24px, 8vw, 110px);
+}
+
+.login-page .welcome-panel {
+  padding-top: clamp(34px, 6vw, 64px);
+  padding-bottom: 26px;
+}
+
+.login-page .welcome-content {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 0 0 30px;
+  text-align: center;
+}
+
+.login-page .welcome-content h1 {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-page .welcome-content > p {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-page .welcome-note {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-page .welcome-footer {
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+}
+
+.login-page .login-panel {
+  flex: 1;
+  padding-top: 20px;
+  padding-bottom: 48px;
+}
+
+.login-page .login-box {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 0;
+}
+
+.login-page .login-heading {
+  text-align: center;
+}
+
+.login-page .role-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.login-page .role-option {
+  min-height: 118px;
+}
+
+.login-page .super-admin-link,
+.login-page .google-login-area,
+.login-page .auth-privacy-note,
+.login-page .terms-copy {
+  width: min(520px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .login-header {
+    min-height: 70px;
+    padding: 14px 20px;
+  }
+
+  .login-header .brand-wordmark {
+    font-size: 15px;
+  }
+
+  .login-header-community {
+    font-size: 11px;
+  }
+
+  .login-page .welcome-panel,
+  .login-page .login-panel {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .login-page .role-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .login-page .welcome-content h1 {
+    font-size: clamp(36px, 11vw, 54px);
+  }
+}
+
+/* Restore the original left/right authentication composition. */
+.login-page {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #000000 !important;
+}
+
+.login-page::before {
+  background: #000000 !important;
+}
+
+.login-page .login-header {
+  display: none;
+}
+
+.login-page .welcome-panel {
+  flex: 0 1 43%;
+  width: auto;
+  min-height: 100svh;
+  padding: 38px clamp(36px, 6vw, 88px) 28px;
+}
+
+.login-page .welcome-panel > .brand {
+  align-self: flex-start;
+}
+
+.login-page .welcome-content {
+  width: min(470px, 100%);
+  margin: auto 0;
+  padding: 66px 0 78px;
+  text-align: left;
+}
+
+.login-page .welcome-content h1,
+.login-page .welcome-content > p {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.login-page .welcome-note {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.login-page .welcome-footer {
+  justify-content: space-between;
+  text-align: left;
+}
+
+.login-page .login-panel {
+  flex: 1 1 57%;
+  width: auto;
+  min-width: 0;
+  min-height: 100svh;
+  padding: 32px clamp(30px, 6vw, 90px) 26px;
+}
+
+.login-page .login-panel-top {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.login-page .login-box {
+  width: min(420px, 100%);
+  margin: auto;
+  padding: 48px 0;
+}
+
+.login-page .login-heading {
+  text-align: left;
+}
+
+.login-page .role-picker {
+  grid-template-columns: 1fr;
+}
+
+.login-page .super-admin-link,
+.login-page .google-login-area,
+.login-page .auth-privacy-note,
+.login-page .terms-copy {
+  width: auto;
+  max-width: 520px;
+  margin-left: 0;
+  margin-right: 0;
+  text-align: left;
+}
+
+@media (max-width: 767px) {
+  .login-page {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .login-page .welcome-panel {
+    display: none;
+  }
+
+  .login-page .login-panel {
+    min-height: 100svh;
+    padding: 22px 24px;
+  }
+
+  .login-page .login-panel-top {
+    position: absolute;
+    top: 28px;
+    right: 24px;
+  }
+
+  .login-page .login-box {
+    width: 100%;
+    padding: 46px 0;
+  }
+
+  .login-page .mobile-brand {
+    display: block;
+    margin-bottom: 34px;
+  }
+
+  .login-page .login-heading {
+    text-align: left;
+  }
+
+  .login-page .role-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .login-page .super-admin-link,
+  .login-page .google-login-area,
+  .login-page .auth-privacy-note,
+  .login-page .terms-copy {
+    text-align: left;
+  }
+}
+
+/* Remove legacy light surfaces from authenticated Emerald Glass pages. */
+.dashboard-shell .dashboard-sidebar .logout-button {
+  border-color: var(--aurora-border);
+  color: var(--aurora-secondary-text);
+  background: transparent;
+}
+
+.dashboard-shell .job-filter-form,
+.dashboard-shell .job-result-card,
+.dashboard-shell .empty-state,
+.dashboard-shell .module-form,
+.dashboard-shell .resume-manager,
+.dashboard-shell .resume-page-card {
+  border-color: rgba(110, 231, 183, 0.16);
+  background: rgba(23, 40, 35, 0.78);
+  color: var(--aurora-text);
+  box-shadow: var(--aurora-shadow);
+}
+
+.dashboard-shell .job-filter-form input,
+.dashboard-shell .job-filter-form select {
+  border-color: var(--aurora-border);
+  color: var(--aurora-text);
+  background: var(--aurora-input);
+}
+
+.dashboard-shell .job-filter-form input::placeholder {
+  color: var(--aurora-muted);
+}
+
+.dashboard-shell .job-filter-form input:focus,
+.dashboard-shell .job-filter-form select:focus {
+  border-color: var(--aurora-lavender);
+  box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.18);
+}
+
+.dashboard-shell .job-result-card {
+  border-radius: 16px;
+}
+
+.dashboard-shell .job-result-main strong {
+  color: var(--aurora-secondary-text);
+}
+
+.dashboard-shell .job-result-main > span {
+  color: var(--aurora-muted);
+}
+
+.dashboard-shell .company-avatar {
+  color: var(--aurora-lavender);
+  background: rgba(110, 231, 183, 0.14);
+}
+
+.dashboard-shell .empty-state {
+  color: var(--aurora-secondary-text);
 }

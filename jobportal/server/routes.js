@@ -24,6 +24,7 @@ import { sendInterviewEmail } from './email.js'
 
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase() || null
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -304,9 +305,9 @@ router.get('/jobs', async (req, res) => {
   if (typeof req.query.location === 'string' && req.query.location.trim()) query.location = new RegExp(escapeRegex(req.query.location.trim().slice(0, 80)), 'i')
   if (['remote', 'hybrid', 'on-site'].includes(req.query.workMode)) query.workMode = req.query.workMode
   if (['full-time', 'part-time', 'internship', 'contract'].includes(req.query.employmentType)) query.employmentType = req.query.employmentType
-  if (typeof req.query.industry === 'string' && req.query.industry.trim()) query.industry = req.query.industry.trim().slice(0, 120)
-  if (req.query.salaryMin && Number.isFinite(Number(req.query.salaryMin))) query.salaryMax = { $gte: Number(req.query.salaryMin) }
-  if (req.query.experienceLevel) query.experienceLevel = String(req.query.experienceLevel).slice(0, 80)
+  if (typeof req.query.industry === 'string' && req.query.industry.trim()) query.industry = new RegExp(escapeRegex(req.query.industry.trim().slice(0, 120)), 'i')
+  if (req.query.salaryMin && Number.isFinite(Number(req.query.salaryMin)) && Number(req.query.salaryMin) >= 0) query.salaryMax = { $gte: Number(req.query.salaryMin) }
+  if (typeof req.query.experienceLevel === 'string' && req.query.experienceLevel.trim()) query.experienceLevel = new RegExp(escapeRegex(req.query.experienceLevel.trim().slice(0, 80)), 'i')
   const sort = req.query.sort === 'relevance' && text ? { score: { $meta: 'textScore' }, publishedAt: -1 } : { publishedAt: -1 }
   const [jobs, total] = await Promise.all([
     Job.find(query).sort(sort).skip(skip).limit(limit).populate('company', 'name logoKey location industry status').lean(),
@@ -896,10 +897,10 @@ router.get('/admin/admins', requireUser, requireRoles('super_admin'), async (req
     User.find({ role: 'super_admin' }).select('name email status createdAt').sort({ createdAt: 1 }).lean(),
     AdminInvite.find({ expiresAt: { $gt: new Date() } }).select('email expiresAt createdAt').lean(),
   ])
-  const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase() || ''
   res.json({
     admins: admins.map((admin) => ({ ...admin, isPrimaryAdmin: admin.email.toLowerCase() === primaryAdminEmail })),
     invites,
+    primaryAdminEmail,
     currentUserIsPrimaryAdmin: Boolean(primaryAdminEmail) && req.user.email.toLowerCase() === primaryAdminEmail,
     primaryAdminConfigured: Boolean(primaryAdminEmail),
   })

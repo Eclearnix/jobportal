@@ -176,6 +176,10 @@ function JobSearch({ onOpen, onSaved }) {
 
   const search = useCallback(async (event) => {
     event?.preventDefault()
+    if (filters.salaryMin !== '' && (!Number.isFinite(Number(filters.salaryMin)) || Number(filters.salaryMin) < 0)) {
+      setError('Minimum salary must be a non-negative number.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -215,7 +219,10 @@ function JobSearch({ onOpen, onSaved }) {
         <article className="job-result-card" key={job._id}>
           <div className="company-avatar">{job.company?.name?.slice(0, 1) || 'J'}</div>
           <div className="job-result-main"><button type="button" className="job-title-link" onClick={() => onOpen(job._id)}>{job.title}</button><strong>{job.company?.name}</strong><span>{job.location} · {humanize(job.workMode)} · {humanize(job.employmentType)}</span></div>
-          <button type="button" className="subtle-button" onClick={() => onSaved(job._id)}>Save job</button>
+          <div className="job-result-actions">
+            <button type="button" className="subtle-button" onClick={() => onOpen(job._id)}>View job</button>
+            <button type="button" className="subtle-button" onClick={() => onSaved(job._id)}>Save job</button>
+          </div>
         </article>
       ))}{!busy && !error && !items.length && <div className="empty-state">No jobs match these filters yet. Try broadening your search.</div>}</div>
     </section>
@@ -359,6 +366,54 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
   )
 }
 
+function CandidateResume({ profile, onSaved }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function uploadResume(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      const body = new FormData()
+      body.set('resume', file)
+      await api('/candidate/resume', { method: 'POST', body })
+      await onSaved()
+    } catch (uploadError) {
+      setError(uploadError.message)
+    } finally {
+      setBusy(false)
+      event.target.value = ''
+    }
+  }
+
+  async function openResume() {
+    setError('')
+    try {
+      const { url } = await api('/candidate/resume')
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (resumeError) {
+      setError(resumeError.message)
+    }
+  }
+
+  return (
+    <section className="module-section">
+      <div className="module-heading"><div><h2>Your resume</h2><p>Keep one current resume ready for every application.</p></div></div>
+      <div className="resume-manager resume-page-card">
+        <div>
+          <h3>{profile?.resumeKey ? 'Resume uploaded' : 'No resume uploaded yet'}</h3>
+          <p>Private PDF or DOCX · Maximum 5 MB</p>
+        </div>
+        {profile?.resumeKey && <button type="button" className="subtle-button" onClick={openResume}><ArrowDownToLine size={14} /> Open resume</button>}
+        <label className="green-button file-upload-button">{busy ? 'Uploading…' : profile?.resumeKey ? 'Replace resume' : 'Upload resume'}<input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={uploadResume} disabled={busy} /></label>
+      </div>
+      {error && <p className="auth-error" role="alert">{error}</p>}
+    </section>
+  )
+}
+
 function SuperAdminSettings({ settings, reload }) {
   const [error, setError] = useState('')
   const [drafts, setDrafts] = useState({})
@@ -401,6 +456,8 @@ function SuperAdminSettings({ settings, reload }) {
 function AdminInvites({ data, reload }) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
+  const primaryAdminEmail = data?.primaryAdminEmail || ''
+  const primaryAdminExists = data?.admins?.some((admin) => admin.email.toLowerCase() === primaryAdminEmail)
 
   async function invite(event) {
     event.preventDefault()
@@ -420,7 +477,21 @@ function AdminInvites({ data, reload }) {
       <form className="admin-invite-form" onSubmit={invite}><input aria-label="Administrator email" type="email" placeholder="admin@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required /><button className="green-button">Invite administrator <ArrowRight size={14} /></button></form>
       {error && <p className="auth-error" role="alert">{error}</p>}
       <h3 className="list-subheading">Current administrators</h3>
-      <DataTable columns={['Name', 'Email', 'Status', 'Added']} rows={(data?.admins || []).map((admin) => ({ id: admin._id, cells: [admin.name, admin.email, <Pill key="status">{admin.status}</Pill>, dateLabel(admin.createdAt)] }))} />
+      {!primaryAdminEmail
+        ? <p className="auth-error" role="alert">Primary administrator is not configured. Set PRIMARY_ADMIN_EMAIL in the backend environment and restart the API.</p>
+        : !primaryAdminExists
+          ? <p className="auth-error" role="alert">The configured primary administrator ({primaryAdminEmail}) does not have a Super Admin account yet. Provision this email before signing in.</p>
+          : null}
+      <DataTable columns={['Name', 'Email', 'Access', 'Status', 'Added']} rows={(data?.admins || []).map((admin) => ({
+        id: admin._id,
+        cells: [
+          admin.name,
+          admin.email,
+          <Pill key="access">{admin.email.toLowerCase() === primaryAdminEmail ? 'Primary administrator' : 'Administrator'}</Pill>,
+          <Pill key="status">{admin.status}</Pill>,
+          dateLabel(admin.createdAt),
+        ],
+      }))} />
       <h3 className="list-subheading">Pending invitations</h3>
       <DataTable columns={['Email', 'Expires']} rows={(data?.invites || []).map((inviteItem) => ({
         id: inviteItem._id,
@@ -648,7 +719,10 @@ function DashboardWorkspace({ role }) {
   if (isCandidate && activePage === 'My Applications') {
     table = <DataTable columns={['Position', 'Organization', 'Status', 'Applied']} rows={(viewData?.items || []).map((item) => ({
       id: item._id, cells: [item.job?.title, item.company?.name, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)], resource: item,
-    }))} actions={(row) => ['submitted', 'under_review', 'shortlisted'].includes(row.resource.status) && <button type="button" className="org-action-button org-remove-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/withdraw`, { method: 'PATCH' }))}>Withdraw</button>} empty="You have not applied to any jobs yet." />
+    }))} actions={(row) => <div className="application-actions">
+      {row.resource.job?._id && <button type="button" className="org-action-button" onClick={() => navigate(`/jobs/${row.resource.job._id}`)}>View job</button>}
+      {['submitted', 'under_review', 'shortlisted'].includes(row.resource.status) && <button type="button" className="org-action-button org-remove-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/withdraw`, { method: 'PATCH' }))}>Withdraw</button>}
+    </div>} empty="You have not applied to any jobs yet." />
   } else if (isCandidate && activePage === 'Saved Jobs') {
     table = <DataTable columns={['Position', 'Organization', 'Location', '']} rows={(viewData?.items || []).map((item) => ({
       id: item._id, cells: [item.job?.title, item.job?.company?.name, item.job?.location, <button type="button" className="text-button" key="open" onClick={() => navigate(`/jobs/${item.job?._id}`)}>View job</button>], resource: item,
@@ -750,19 +824,19 @@ function DashboardWorkspace({ role }) {
 
   return (
     <div className="dashboard-shell">
-      <aside className="dashboard-sidebar">
+      <aside className="dashboard-sidebar dashboard-sidebar-intro">
         <a href="/" className="brand"><span className="brand-symbol">e</span><span className="brand-wordmark">eclearnix<span>jobs</span></span></a>
         <div className="workspace-label">YOUR WORKSPACE</div>
         <div className="workspace-switcher"><span className={`workspace-avatar avatar-${role}`}>{(role === 'recruiter' ? payload?.company?.name : user.name)?.charAt(0) || 'E'}</span><span><strong>{role === 'recruiter' ? payload?.company?.name || 'Organization' : role === 'super_admin' ? 'Super Admin' : user.name}</strong><small>{role === 'super_admin' ? 'Platform control' : role === 'recruiter' ? payload?.company?.status === 'verified' ? 'Verified organization' : 'Pending organization' : 'Candidate workspace'}</small></span></div>
         <nav className="dashboard-nav" aria-label={`${role} navigation`}>
           <span className="nav-section-label">WORKSPACE</span>
-          {navItems.map(([label, Icon]) => <button key={label} type="button" className={`dashboard-nav-item ${activePage === label ? 'dashboard-nav-active' : ''}`} onClick={() => goTo(label)}><span className="nav-icon"><Icon size={16} /></span>{label}{isAdmin && label === 'Verification Requests' && payload?.summary?.pendingVerifications > 0 && <span className="nav-count">{payload.summary.pendingVerifications}</span>}</button>)}
+          {navItems.map(([label, Icon], index) => <button key={label} type="button" className={`dashboard-nav-item ${activePage === label ? 'dashboard-nav-active' : ''}`} style={{ '--sidebar-item-index': index }} onClick={() => goTo(label)}><span className="nav-icon"><Icon size={16} /></span>{label}{isAdmin && label === 'Verification Requests' && payload?.summary?.pendingVerifications > 0 && <span className="nav-count">{payload.summary.pendingVerifications}</span>}</button>)}
         </nav>
         <button type="button" className="logout-button" onClick={async () => { await signOut(); navigate('/login', { replace: true }) }}><LogOut size={15} /> Sign out</button>
       </aside>
 
       <main className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions"><label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label><span className="user-avatar">{user.picture ? <img src={user.picture} alt="" /> : user.name.slice(0, 1)}</span><strong className="profile-name">{user.name}</strong></div></header>
+        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions">{isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}<span className="user-avatar">{user.picture ? <img src={user.picture} alt="" /> : user.name.slice(0, 1)}</span><strong className="profile-name">{user.name}</strong></div></header>
         <div className="dashboard-content">
           <div className="dashboard-welcome"><div><div className="date-line">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div><h1>{title}</h1><p>{isAdmin ? 'Manage people, organizations, and the standards that make this marketplace trusted.' : isRecruiter ? `Your organization is ${payload?.company?.status || 'loading'} · see what needs your attention today.` : 'A thoughtful next step can bring the right opportunity closer.'}</p></div>
             {isCandidate && <button className="green-button" type="button" onClick={() => goTo('My Profile')}>Complete profile <ArrowRight size={14} /></button>}
@@ -798,7 +872,7 @@ function DashboardWorkspace({ role }) {
               : 'Draft saved. Publish it when ready; candidates only see published jobs.')
           }} />}
           {!loading && !error && isCandidate && activePage === 'My Profile' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
-          {!loading && !error && isCandidate && activePage === 'Resume' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
+          {!loading && !error && isCandidate && activePage === 'Resume' && <CandidateResume profile={viewData?.profile} onSaved={reload} />}
           {!loading && !error && isAdmin && activePage === 'Settings' && <SuperAdminSettings settings={viewData?.items || []} reload={reload} />}
           {!loading && !error && isAdmin && activePage === 'Admin Management' && <AdminInvites data={viewData} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Company Profile' && <CompanyProfile company={viewData?.company} onSaved={reload} />}

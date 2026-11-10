@@ -43,13 +43,13 @@ export default function LoginPage() {
   return (
     <main className="login-page">
       <Aurora
-        colorStops={['#0b3d91', '#1677ff', '#7db7ff']}
+        colorStops={['#0F766E', '#06B6D4', '#3B82F6', '#A5F3FC']}
         amplitude={1}
         blend={0.5}
         height={0.45}
-        speed={1}
-        glow={0.6}
-        mouseInteraction={false}
+        opacity={1.25}
+        speed={0.7}
+        glow={0.5}
       />
       <aside className="welcome-panel">
         <Brand />

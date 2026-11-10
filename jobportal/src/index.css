@@ -2,8 +2,8 @@
   font-family: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #1d2924;
-  background: #fff;
+  color: #f8fafc;
+  background: #080d0c;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,7 +23,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #fff;
+  background: #080d0c;
   zoom: 1.2;
 }
 
@@ -35,7 +35,7 @@ input {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 3px solid rgba(12, 155, 107, 0.3);
+  outline: 3px solid rgba(110, 231, 183, 0.45);
   outline-offset: 2px;
 }
 

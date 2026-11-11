@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import GoogleButtonSpecularEffect from './GoogleButtonSpecularEffect'
 
 const GOOGLE_SCRIPT = 'https://accounts.google.com/gsi/client'
 
@@ -41,10 +42,11 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
       if (!googleIdentity) return
       const width = Math.min(360, Math.floor(container.clientWidth))
       if (!width || width === renderedWidth.current) return
+      if (container.parentElement) container.parentElement.style.width = `${width}px`
       container.replaceChildren()
       googleIdentity.accounts.id.renderButton(container, {
         type: 'standard',
-        theme: 'outline',
+        theme: 'filled_black',
         size: 'large',
         shape: 'rectangular',
         text: 'continue_with',
@@ -90,6 +92,7 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
   return (
     <div className={`google-signin ${disabled ? 'google-signin-disabled' : ''}`}>
       <div ref={buttonRef} aria-label={`Continue with Google as ${role}`} />
+      <GoogleButtonSpecularEffect targetContainerRef={buttonRef} disabled={disabled} />
       {disabled && <span className="google-signin-cover" aria-hidden="true" />}
       {error && <p className="integration-error" role="alert">{error}</p>}
     </div>

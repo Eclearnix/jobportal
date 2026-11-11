@@ -1,0 +1,17 @@
+.google-signin > .google-specular-effect {
+ /* --google-shine-color: #000000;
+--google-shine-base-color: #FFFFFF; */
+  --google-shine-color: #E5E7EB;
+--google-shine-base-color: #111111;
+  --google-shine-intensity: 0.9;
+  --google-shine-idle-intensity: 0.2;
+  --google-shine-press-intensity: 0.7;
+  --google-shine-size: 1;
+  --google-shine-fade: 34;
+  --google-shine-thickness: 4;
+  --google-shine-glow: 2;
+  position: absolute;
+  z-index: 3;
+  display: block;
+  pointer-events: none;
+}

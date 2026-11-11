@@ -8,6 +8,20 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api, queryString } from '../services/api'
 
+function UserAvatar({ name, picture }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const pictureUrl = typeof picture === 'string' ? picture.trim() : ''
+  const initial = name?.trim().charAt(0).toUpperCase() || '?'
+
+  return (
+    <span className="user-avatar" role="img" aria-label={`${name || 'User'} profile picture`}>
+      {pictureUrl && !imageFailed
+        ? <img src={pictureUrl} alt="" onError={() => setImageFailed(true)} />
+        : initial}
+    </span>
+  )
+}
+
 const navigation = {
   candidate: [
     ['Overview', LayoutDashboard], ['Find Jobs', Search], ['My Applications', ClipboardList],
@@ -836,7 +850,7 @@ function DashboardWorkspace({ role }) {
       </aside>
 
       <main className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions">{isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}<span className="user-avatar">{user.picture ? <img src={user.picture} alt="" /> : user.name.slice(0, 1)}</span><strong className="profile-name">{user.name}</strong></div></header>
+        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions">{isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}<UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></div></header>
         <div className="dashboard-content">
           <div className="dashboard-welcome"><div><div className="date-line">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div><h1>{title}</h1><p>{isAdmin ? 'Manage people, organizations, and the standards that make this marketplace trusted.' : isRecruiter ? `Your organization is ${payload?.company?.status || 'loading'} · see what needs your attention today.` : 'A thoughtful next step can bring the right opportunity closer.'}</p></div>
             {isCandidate && <button className="green-button" type="button" onClick={() => goTo('My Profile')}>Complete profile <ArrowRight size={14} /></button>}

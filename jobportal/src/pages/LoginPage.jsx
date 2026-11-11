@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { BriefcaseBusiness, Building2, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import GoogleSignInButton from '../components/GoogleSignInButton'
-import Aurora from '../components/Aurora'
+import MicroSlats from '../components/MicroSlats'
 import { useAuth } from '../context/AuthContext'
 
 const publicRoles = [
@@ -42,15 +42,41 @@ export default function LoginPage() {
 
   return (
     <main className="login-page">
-      <Aurora
-        colorStops={['#0F766E', '#06B6D4', '#3B82F6', '#A5F3FC']}
-        amplitude={1}
-        blend={0.5}
-        height={0.45}
-        opacity={1.25}
-        speed={0.7}
-        glow={0.5}
+      <MicroSlats
+        className="login-background-animation"
+        style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}
+        preset="swell"
+        color="#4a4646"
+        // glintColor="#ffffff4b"
+        glintColor="#ffffff4b"
+        backgroundColor="#000000"
+        slatWidth={100}
+        slatHeight={130}
+        gap={3}
+        roundness={0.75}
+        interactive={false}
+        intro
       />
+
+     {/* <MicroSlats
+  className="login-background-animation"
+  style={{
+    position: 'absolute',
+    inset: 0,
+    zIndex: 1,
+    pointerEvents: 'none'
+  }}
+  preset="swell"
+  color="#164E9A"
+  glintColor="#BFDBFE"
+  backgroundColor="#050B18"
+  slatWidth={100}
+  slatHeight={130}
+  gap={3}
+  roundness={0.75}
+  interactive={false}
+  intro
+/> */}
       <aside className="welcome-panel">
         <Brand />
         <div className="welcome-content">

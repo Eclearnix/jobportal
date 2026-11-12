@@ -202,7 +202,7 @@ export default function GoogleButtonSpecularEffect({ targetContainerRef, disable
       }
     }
     const view = { width: 1, height: 1, ratio: 1, left: 0, top: 0 }
-    const pointer = { x: 0, y: 0, known: false }
+    const pointer = { x: 0, y: 0, known: false, overTarget: false }
     const state = { spot: 0, level: 0, press: 0, ready: false }
     const targetRef = { current: null }
     const raf = { current: 0 }
@@ -266,7 +266,9 @@ export default function GoogleButtonSpecularEffect({ targetContainerRef, disable
       if (!visible.current || !targetRef.current) return
       const dt = last.current ? Math.min(0.05, (now - last.current) / 1000) : 1 / 60
       last.current = now
-      const targetSpot = aim()
+      const targetSpot = pointer.overTarget && !disabledRef.current
+        ? { spot: wrap(now * 0.00012), near: 1 }
+        : aim()
       const desiredLevel = disabledRef.current ? 0 : settings.idleIntensity + (1 - settings.idleIntensity) * (targetSpot?.near ?? 0)
       if (!state.ready) {
         state.spot = restSpot()
@@ -318,6 +320,12 @@ export default function GoogleButtonSpecularEffect({ targetContainerRef, disable
     }
     const onPointerLeave = () => {
       pointer.known = false
+      pointer.overTarget = false
+      wake()
+    }
+    const onTargetEnter = () => {
+      pointer.overTarget = true
+      pointer.known = true
       wake()
     }
     const onPointerDown = () => {
@@ -341,19 +349,29 @@ export default function GoogleButtonSpecularEffect({ targetContainerRef, disable
     })
     const observedTarget = { current: null }
     const syncTarget = () => {
-      const nextTarget = container.querySelector('[role="button"]')
+      const button = container.querySelector('[role="button"]')
+      const frame = Array.from(container.querySelectorAll('iframe')).find((candidate) => {
+        const rect = candidate.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+      const nextTarget = button || frame
       if (nextTarget === observedTarget.current) return
       if (observedTarget.current) {
         resizeObserver.unobserve(observedTarget.current)
         intersectionObserver.unobserve(observedTarget.current)
         observedTarget.current.removeEventListener('pointerdown', onPointerDown)
+        observedTarget.current.removeEventListener('pointerenter', onTargetEnter)
+        observedTarget.current.removeEventListener('pointerleave', onPointerLeave)
       }
+      pointer.overTarget = false
       observedTarget.current = nextTarget
       targetRef.current = nextTarget
       if (!targetRef.current) return
       resizeObserver.observe(targetRef.current)
       intersectionObserver.observe(targetRef.current)
       targetRef.current.addEventListener('pointerdown', onPointerDown)
+      targetRef.current.addEventListener('pointerenter', onTargetEnter)
+      targetRef.current.addEventListener('pointerleave', onPointerLeave)
       measure()
     }
     const mutationObserver = new MutationObserver(syncTarget)
@@ -373,7 +391,11 @@ export default function GoogleButtonSpecularEffect({ targetContainerRef, disable
       window.removeEventListener('pointerup', onPointerEnd)
       window.removeEventListener('pointercancel', onPointerEnd)
       document.documentElement.removeEventListener('pointerleave', onPointerLeave)
-      if (observedTarget.current) observedTarget.current.removeEventListener('pointerdown', onPointerDown)
+      if (observedTarget.current) {
+        observedTarget.current.removeEventListener('pointerdown', onPointerDown)
+        observedTarget.current.removeEventListener('pointerenter', onTargetEnter)
+        observedTarget.current.removeEventListener('pointerleave', onPointerLeave)
+      }
       gl.deleteBuffer(buffer)
       gl.deleteVertexArray(vao)
       gl.deleteProgram(program)

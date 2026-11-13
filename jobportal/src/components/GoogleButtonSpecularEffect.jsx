@@ -294,13 +294,14 @@ export default function GoogleButtonSpecularEffect({ targetContainerRef, disable
     const measure = () => {
       if (!targetRef.current) return
       const targetRect = targetRef.current.getBoundingClientRect()
+      const buttonRect = container.getBoundingClientRect()
       const overlayRoot = canvas.offsetParent || container
-      const containerRect = overlayRoot.getBoundingClientRect()
-      const cssScale = targetRect.width / targetRef.current.offsetWidth || 1
-      view.width = Math.max(1, targetRect.width / cssScale)
+      const overlayRect = overlayRoot.getBoundingClientRect()
+      const cssScale = buttonRect.width / container.offsetWidth || 1
+      view.width = Math.max(1, buttonRect.width / cssScale)
       view.height = Math.max(1, targetRect.height / cssScale)
-      view.left = (targetRect.left - containerRect.left) / cssScale
-      view.top = (targetRect.top - containerRect.top) / cssScale
+      view.left = (buttonRect.left - overlayRect.left) / cssScale
+      view.top = (targetRect.top - overlayRect.top) / cssScale
       view.ratio = Math.min(window.devicePixelRatio || 1, 3)
       canvas.style.width = `${view.width}px`
       canvas.style.height = `${view.height}px`

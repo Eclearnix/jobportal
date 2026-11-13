@@ -1,5 +1,4 @@
 import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import {
   ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, ClipboardList, FileText,
   LayoutDashboard, LogOut, Search, Settings, Shield, Users, UserRound, X,
@@ -88,70 +87,6 @@ function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here 
       </table></div>
       <div className="table-footer"><span>{filteredRows.length} of {rows.length} item{rows.length === 1 ? '' : 's'}</span></div>
     </div>
-  )
-}
-
-function ScheduleInterviewForm({ applicationId, onSaved, onScheduled }) {
-  const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [minimumDateTime] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16))
-
-  async function submit(event) {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    const form = new FormData(event.currentTarget)
-    try {
-      const result = await api(`/recruiter/applications/${applicationId}/interviews`, {
-        method: 'POST',
-        body: {
-          scheduledAt: new Date(String(form.get('scheduledAt'))).toISOString(),
-          durationMinutes: Number(form.get('durationMinutes')),
-          meetingUrl: form.get('meetingUrl'),
-          notes: form.get('notes'),
-        },
-      })
-      setOpen(false)
-      onScheduled(result.emailSent
-        ? 'Interview scheduled and email sent to the candidate.'
-        : `Interview scheduled and in-app notification created, but email was not sent. ${result.emailError}`)
-      await onSaved()
-    } catch (scheduleError) {
-      setError(scheduleError.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <>
-      <button type="button" className="org-action-button" onClick={() => { setOpen(!open); setError('') }}>
-        {open ? 'Cancel' : 'Schedule interview'}
-      </button>
-      {open && createPortal(
-        <div className="interview-modal-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !busy) setOpen(false)
-        }}>
-          <section className="interview-modal" role="dialog" aria-modal="true" aria-labelledby={`interview-title-${applicationId}`}>
-            <h2 id={`interview-title-${applicationId}`}>Schedule interview</h2>
-            <p>Choose a time and share the meeting details with the candidate.</p>
-            <form className="interview-scheduler-form" onSubmit={submit}>
-              <label>Date and time<input name="scheduledAt" type="datetime-local" required min={minimumDateTime} /></label>
-              <label>Duration<select name="durationMinutes" defaultValue="30"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
-              <label>Meeting link<input name="meetingUrl" type="url" maxLength={500} placeholder="https://…" /></label>
-              <label>Notes<textarea name="notes" rows="3" maxLength="2000" /></label>
-              {error && <p className="auth-error" role="alert">{error}</p>}
-              <div className="interview-modal-actions">
-                <button type="button" className="subtle-button" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
-                <button type="submit" className="green-button" disabled={busy}>{busy ? 'Scheduling…' : 'Confirm interview'}</button>
-              </div>
-            </form>
-          </section>
-        </div>,
-        document.body,
-      )}
-    </>
   )
 }
 
@@ -744,7 +679,7 @@ function DashboardWorkspace({ role }) {
   } else if (isCandidate && activePage === 'Interviews') {
     table = <DataTable columns={['Interview', 'Organization', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,
-      cells: [item.application?.job?.title, item.company?.name, new Date(item.scheduledAt).toLocaleString(), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : 'Details in your invitation'],
+      cells: [item.application?.job?.title, item.company?.name, new Date(item.scheduledAt).toLocaleString(), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : 'Details in your invitation'],
       resource: item,
     }))} empty="Upcoming interviews will appear here." />
   } else if (activePage === 'Notifications' && (isCandidate || isRecruiter || isAdmin)) {
@@ -778,10 +713,17 @@ function DashboardWorkspace({ role }) {
           : ['Candidate', 'Email', 'Title', 'Applications']}
       rows={rows}
       actions={(row) => activePage === 'Manage Jobs'
-        ? <button className="org-action-button" type="button" onClick={() => mutate(() => api(`/recruiter/jobs/${row.id}/status`, { method: 'PATCH', body: { status: row.resource.status === 'published' ? 'paused' : 'published' } }))}>{row.resource.status === 'published' ? 'Pause' : 'Publish'}</button>
+        ? <div className="application-actions">
+          <button className="org-action-button" type="button" onClick={() => mutate(() => api(`/recruiter/jobs/${row.id}/status`, { method: 'PATCH', body: { status: row.resource.status === 'published' ? 'paused' : 'published' } }))}>{row.resource.status === 'published' ? 'Pause' : 'Publish'}</button>
+          <button className="org-action-button org-remove-button" type="button" onClick={() => {
+            if (window.confirm(`Permanently delete "${row.resource.title}"? Applications, saved-job entries, and interviews will remain, but the job details will no longer be available.`)) {
+              mutate(() => api(`/recruiter/jobs/${row.id}`, { method: 'DELETE' }))
+            }
+          }}>Delete</button>
+        </div>
         : activePage === 'Candidates'
           ? <div className="application-actions"><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate._id)}>View profile</button>{row.resource.applications[0] && <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.resource.applications[0].id)}>Resume</button>}</div>
-          : <div className="application-actions"><select aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button><ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} /></div>}
+          : <div className="application-actions"><select className="application-status-select" aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button></div>}
       empty="No records to show yet."
     />
   } else if (isRecruiter && activePage === 'Discover Candidates') {
@@ -793,7 +735,7 @@ function DashboardWorkspace({ role }) {
   } else if (isRecruiter && activePage === 'Interviews') {
     table = <DataTable columns={['Candidate', 'Job', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,
-      cells: [item.candidate?.name, item.application?.job?.title, new Date(item.scheduledAt).toLocaleString(), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : '—'],
+      cells: [item.candidate?.name, item.application?.job?.title, new Date(item.scheduledAt).toLocaleString(), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : '—'],
       resource: item,
     }))} empty="Scheduled interviews will appear here." />
   } else if (isAdmin && activePage === 'Organization Management' || isAdmin && activePage === 'Verification Requests') {

@@ -3354,50 +3354,6 @@ button {
   gap: 5px;
 }
 
-.interview-scheduler-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  margin-top: 16px;
-}
-
-.interview-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  overflow-y: auto;
-  padding: 20px;
-  background: rgba(26, 42, 33, 0.42);
-}
-
-.interview-modal {
-  width: min(480px, 100%);
-  max-height: min(90vh, 760px);
-  overflow-y: auto;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 18px 48px rgba(27, 52, 40, 0.2);
-}
-
-.interview-modal h2 {
-  margin: 0;
-  color: #26382e;
-  font-size: 18px;
-}
-
-.interview-modal > p {
-  margin: 7px 0 0;
-  color: #78827d;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.interview-scheduler-form label,
 .job-report .module-form label {
   display: flex;
   flex-direction: column;
@@ -3406,9 +3362,6 @@ button {
   font-size: 9px;
 }
 
-.interview-scheduler-form input,
-.interview-scheduler-form select,
-.interview-scheduler-form textarea,
 .job-report .module-form select,
 .job-report .module-form textarea {
   min-width: 0;
@@ -3419,47 +3372,6 @@ button {
   color: #36443b;
   background: white;
   font-size: 9px;
-}
-
-.interview-scheduler-form label {
-  font-size: 11px;
-}
-
-.interview-scheduler-form input,
-.interview-scheduler-form select,
-.interview-scheduler-form textarea {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 40px;
-  padding: 9px 10px;
-  font-size: 12px;
-}
-
-.interview-scheduler-form textarea {
-  resize: vertical;
-}
-
-.interview-scheduler-form .green-button {
-  justify-content: center;
-}
-
-.interview-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-@media (max-width: 560px) {
-  .interview-modal-backdrop {
-    align-items: end;
-    padding: 10px;
-  }
-
-  .interview-modal {
-    max-height: 92vh;
-    padding: 18px;
-  }
 }
 
 .candidate-preview-backdrop {
@@ -5730,7 +5642,6 @@ body,
 
 .workspace-loading,
 .workspace-error,
-.interview-modal,
 .candidate-preview {
   border-color: var(--aurora-border);
   color: var(--aurora-text);
@@ -5744,46 +5655,20 @@ body,
 }
 
 .workspace-error p,
-.interview-modal > p,
 .candidate-preview p,
 .candidate-preview a {
   color: var(--aurora-secondary-text);
 }
 
-.interview-modal h2,
 .candidate-preview h2,
 .candidate-preview h3 {
   color: var(--aurora-text);
 }
 
-.interview-modal-backdrop,
 .candidate-preview-backdrop {
   background: rgba(0, 0, 0, 0.72);
 }
 
-.interview-scheduler-form label,
-.interview-scheduler-form input,
-.interview-scheduler-form select,
-.interview-scheduler-form textarea {
-  color: var(--aurora-text);
-}
-
-.interview-scheduler-form input,
-.interview-scheduler-form select,
-.interview-scheduler-form textarea {
-  border-color: var(--aurora-border);
-  background: var(--aurora-input);
-  color-scheme: dark;
-}
-
-.interview-scheduler-form input:focus,
-.interview-scheduler-form select:focus,
-.interview-scheduler-form textarea:focus {
-  border-color: var(--aurora-lavender);
-  box-shadow: 0 0 0 3px rgba(212, 212, 216, 0.14);
-}
-
-.interview-modal .subtle-button,
 .candidate-preview-close {
   border-color: var(--aurora-border);
   color: var(--aurora-secondary-text);
@@ -6060,6 +5945,23 @@ body,
   color-scheme: dark;
 }
 
+.dashboard-shell .application-status-select {
+  width: 184px;
+  max-width: 184px;
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.dashboard-shell .application-status-select option {
+  color: var(--aurora-text);
+  background-color: var(--aurora-elevated);
+}
+
+.dashboard-shell .application-status-select option:disabled {
+  color: var(--aurora-muted);
+}
+
 .dashboard-shell input::placeholder,
 .dashboard-shell textarea::placeholder {
   color: var(--aurora-muted);
@@ -6091,7 +5993,6 @@ body,
 
 .workspace-loading,
 .workspace-error,
-.interview-modal,
 .candidate-preview {
   border-color: var(--aurora-border);
   color: var(--aurora-text);
@@ -6104,13 +6005,11 @@ body,
   border-top-color: var(--aurora-purple);
 }
 
-.interview-modal h2,
 .candidate-preview h2,
 .candidate-preview h3 {
   color: var(--aurora-text);
 }
 
-.interview-modal > p,
 .candidate-preview p,
 .candidate-preview a,
 .workspace-loading,
@@ -6118,32 +6017,10 @@ body,
   color: var(--aurora-secondary-text);
 }
 
-.interview-modal-backdrop,
 .candidate-preview-backdrop {
   background: rgba(0, 0, 0, 0.72);
 }
 
-.interview-scheduler-form label {
-  color: var(--aurora-secondary-text);
-}
-
-.interview-scheduler-form input,
-.interview-scheduler-form select,
-.interview-scheduler-form textarea {
-  border-color: var(--aurora-border);
-  color: var(--aurora-text);
-  background: var(--aurora-input);
-  color-scheme: dark;
-}
-
-.interview-scheduler-form input:focus,
-.interview-scheduler-form select:focus,
-.interview-scheduler-form textarea:focus {
-  border-color: var(--aurora-secondary);
-  box-shadow: 0 0 0 3px rgba(212, 212, 216, 0.14);
-}
-
-.interview-modal .subtle-button,
 .candidate-preview-close {
   border-color: var(--aurora-border);
   color: var(--aurora-secondary-text);
@@ -6155,7 +6032,6 @@ body,
 }
 
 .dashboard-shell :focus-visible,
-.interview-modal :focus-visible,
 .candidate-preview :focus-visible {
   outline: 2px solid var(--aurora-secondary);
   outline-offset: 2px;
@@ -6224,4 +6100,13 @@ body,
 .job-details-page .application-form input[type='file']:focus {
   border-color: var(--aurora-secondary);
   box-shadow: 0 0 0 3px rgba(212, 212, 216, 0.14);
+}
+
+.dashboard-shell .meeting-link:link,
+.dashboard-shell .meeting-link:visited {
+  color: #8ecbff;
+}
+
+.dashboard-shell .meeting-link:hover {
+  color: #b8e0ff;
 }

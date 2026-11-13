@@ -621,6 +621,13 @@ router.post('/recruiter/jobs', requireUser, requireRoles('recruiter'), requireCo
   res.status(201).json({ job })
 })
 
+router.delete('/recruiter/jobs/:jobId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const id = validate(objectId, req.params.jobId)
+  const job = await Job.findOneAndDelete({ _id: id, company: req.company._id })
+  if (!job) return res.status(404).json({ error: 'Job not found.' })
+  res.status(204).end()
+})
+
 router.patch('/recruiter/jobs/:jobId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const id = validate(objectId, req.params.jobId)
   const input = validate(jobInput.partial(), req.body)

@@ -21,7 +21,7 @@ import {
 import { requireCompanyMember, requirePrimaryAdmin, requireRoles, requireUser } from './middleware/auth.js'
 import { savePrivateFile, streamPrivateFile } from './storage.js'
 import { sendCompanyInvitationEmail, sendInterviewEmail } from './email.js'
-import { normalizeRecruiterNotificationPreferences, notifyRecruiterMembers } from './notifications.js'
+import { normalizeCandidateNotificationPreferences, normalizeRecruiterNotificationPreferences, notifyRecruiterMembers } from './notifications.js'
 
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
@@ -31,6 +31,11 @@ const recruiterNotificationPreferencesInput = z.object({
   applicationReceived: notificationChannelInput,
   interviewUpdates: notificationChannelInput,
   teamUpdates: notificationChannelInput,
+}).strict()
+const candidateNotificationPreferencesInput = z.object({
+  jobMatches: notificationChannelInput,
+  applicationUpdates: notificationChannelInput,
+  interviewReminders: notificationChannelInput,
 }).strict()
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -108,6 +113,28 @@ router.delete('/recruiter/team-invitations/:inviteId', requireUser, requireRoles
   const result = await CompanyInvite.deleteOne({ _id: id, company: req.company._id })
   if (!result.deletedCount) return res.status(404).json({ error: 'Invitation not found.' })
   res.status(204).end()
+})
+
+router.get('/candidate/settings', requireUser, requireRoles('candidate'), async (req, res) => {
+  res.json({
+    profile: {
+      openToOpportunities: req.user.openToOpportunities,
+    },
+    notificationPreferences: normalizeCandidateNotificationPreferences(req.user.candidateNotificationPreferences),
+  })
+})
+
+router.patch('/candidate/settings/notifications', requireUser, requireRoles('candidate'), async (req, res) => {
+  const { notificationPreferences } = validate(z.object({
+    notificationPreferences: candidateNotificationPreferencesInput,
+  }).strict(), req.body)
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: { candidateNotificationPreferences: notificationPreferences } },
+    { new: true, runValidators: true },
+  ).select('candidateNotificationPreferences').lean()
+  if (!user) return res.status(404).json({ error: 'Candidate account not found.' })
+  res.json({ notificationPreferences: normalizeCandidateNotificationPreferences(user.candidateNotificationPreferences) })
 })
 
 router.get('/recruiter/settings', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -423,7 +450,7 @@ router.get('/dashboard/candidate', requireUser, requireRoles('candidate'), async
   const [applicationsSent, interviews, profile, recentApplications, recommendedJobs, unreadNotifications] = await Promise.all([
     Application.countDocuments({ candidate: req.user._id, status: { $ne: 'withdrawn' } }),
     Interview.countDocuments({ candidate: req.user._id, status: 'scheduled', scheduledAt: { $gte: new Date() } }),
-    User.findById(req.user._id).select('name title location skills education experience resumeKey phone preferredLocations openToOpportunities profileViews'),
+    User.findById(req.user._id).select('name title location skills education experience resumeKey phone preferredLocations openToOpportunities profileViews candidateNotificationPreferences'),
     Application.find({ candidate: req.user._id }).sort({ createdAt: -1 }).limit(5).populate({ path: 'job', select: 'title location employmentType' }).populate({ path: 'company', select: 'name' }).lean(),
     Job.find({ status: 'published', ...(req.user.skills?.length ? { skills: { $in: req.user.skills } } : {}) }).sort({ publishedAt: -1 }).limit(4).populate('company', 'name location').lean(),
     Notification.countDocuments({ user: req.user._id, readAt: null, archivedAt: null }),

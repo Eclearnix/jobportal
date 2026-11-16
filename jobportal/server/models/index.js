@@ -13,6 +13,12 @@ const recruiterNotificationPreferencesSchema = new Schema({
   teamUpdates: { type: notificationChannelSchema, default: () => ({}) },
 }, { _id: false })
 
+const candidateNotificationPreferencesSchema = new Schema({
+  jobMatches: { type: notificationChannelSchema, default: () => ({}) },
+  applicationUpdates: { type: notificationChannelSchema, default: () => ({}) },
+  interviewReminders: { type: notificationChannelSchema, default: () => ({}) },
+}, { _id: false })
+
 const userSchema = new Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   googleId: { type: String, unique: true, sparse: true, index: true },
@@ -32,6 +38,7 @@ const userSchema = new Schema({
   openToOpportunities: { type: Boolean, default: false, index: true },
   resumeKey: { type: String, default: '' },
   lastLoginAt: { type: Date },
+  candidateNotificationPreferences: { type: candidateNotificationPreferencesSchema, default: () => ({}) },
   recruiterNotificationPreferences: { type: recruiterNotificationPreferencesSchema, default: () => ({}) },
 }, { timestamps: true, strict: 'throw' })
 

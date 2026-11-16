@@ -454,6 +454,85 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
   )
 }
 
+function CandidateSettings({ profile, notificationPreferences, onSaved }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [preferences, setPreferences] = useState(notificationPreferences || {
+    jobMatches: { inApp: true, email: false },
+    applicationUpdates: { inApp: true, email: false },
+    interviewReminders: { inApp: true, email: true },
+  })
+
+  useEffect(() => {
+    if (notificationPreferences) {
+      setPreferences(notificationPreferences)
+    }
+  }, [notificationPreferences])
+
+  async function updateProfileVisibility(checked) {
+    try {
+      await api('/candidate/profile', { method: 'PATCH', body: { openToOpportunities: checked } })
+      await onSaved()
+    } catch (saveError) {
+      setError(saveError.message)
+    }
+  }
+
+  async function savePreferences(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await api('/candidate/settings/notifications', { method: 'PATCH', body: { notificationPreferences: preferences } })
+      await onSaved()
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function toggleChannel(key, channel) {
+    setPreferences((current) => ({
+      ...current,
+      [key]: {
+        ...current[key],
+        [channel]: !current[key]?.[channel],
+      },
+    }))
+  }
+
+  return (
+    <section className="module-section job-seeker-settings">
+      <div className="module-heading"><div><p>Control how employers find you and how you receive updates.</p></div></div>
+      <form className="module-form" onSubmit={savePreferences}>
+        <label className="checkbox-field">
+          <input type="checkbox" checked={!!profile?.openToOpportunities} onChange={(event) => updateProfileVisibility(event.target.checked)} />
+          <span><strong>Open to opportunities</strong><small>Let verified organizations discover your profile and contact you with relevant roles.</small></span>
+        </label>
+
+        <div className="settings-notification-grid">
+          <div className="settings-notification-heading"><span>Update</span><span>In-app</span><span>Email</span></div>
+          {Object.entries({
+            jobMatches: 'Job matches',
+            applicationUpdates: 'Application updates',
+            interviewReminders: 'Interview reminders',
+          }).map(([key, label]) => (
+            <div className="settings-notification-row" key={key}>
+              <div><strong>{label}</strong></div>
+              <div className="checkbox-field"><input type="checkbox" checked={!!preferences[key]?.inApp} onChange={() => toggleChannel(key, 'inApp')} /></div>
+              <div className="checkbox-field"><input type="checkbox" checked={!!preferences[key]?.email} onChange={() => toggleChannel(key, 'email')} /></div>
+            </div>
+          ))}
+        </div>
+
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <button type="submit" className="green-button" disabled={busy}>{busy ? 'Saving…' : 'Save settings'} <ArrowRight size={14} /></button>
+      </form>
+    </section>
+  )
+}
+
 function CandidateResume({ profile, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -801,7 +880,7 @@ function DashboardWorkspace({ role }) {
             Resume: '/dashboard/candidate',
             Interviews: '/candidate/interviews',
             Notifications: `/candidate/notifications?archived=${showArchivedNotifications}`,
-            Settings: '/dashboard/candidate',
+            Settings: '/candidate/settings',
           }[activePage]
           nextView = await api(endpoint)
           if (requestId !== loadSequence.current) return
@@ -1187,7 +1266,7 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && isRecruiter && activePage === 'Settings' && <OrganizationSettings settings={viewData} reload={reload} />}
           {!loading && !error && isAdmin && activePage === 'Admin Management' && <AdminInvites data={viewData} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Company Profile' && <CompanyProfile company={viewData?.company} onSaved={reload} />}
-          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
+          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateSettings profile={viewData?.profile || payload?.profile} notificationPreferences={viewData?.notificationPreferences || payload?.notificationPreferences} onSaved={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} timeZone={organizationTimeZone} />}
           {!loading && !error && table && <section className="module-section">
             {isCandidate && activePage === 'My Applications' && <div className="candidate-applications-toolbar">

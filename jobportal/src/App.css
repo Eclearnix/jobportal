@@ -3574,6 +3574,24 @@ button {
 .dashboard-shell .job-result-main > span { font-size: 13px; }
 .dashboard-shell .dashboard-welcome h1 { font-size: clamp(29px, 3vw, 38px); }
 .dashboard-shell .module-heading h2 { font-size: 22px; }
+.dashboard-shell .job-seeker-settings .module-heading p {
+  font-size: 15px;
+  color: #5f6d66;
+}
+.dashboard-shell .job-seeker-settings .module-form {
+  font-size: 16px;
+}
+.dashboard-shell .job-seeker-settings .module-form label,
+.dashboard-shell .job-seeker-settings .module-form .checkbox-field span,
+.dashboard-shell .job-seeker-settings .module-form .settings-notification-row strong {
+  font-size: 15px;
+}
+.dashboard-shell .job-seeker-settings .module-form .checkbox-field small {
+  font-size: 13px;
+}
+.dashboard-shell .job-seeker-settings .green-button {
+  font-size: 16px;
+}
 .dashboard-shell .green-button,
 .dashboard-shell .subtle-button,
 .dashboard-shell .text-button,

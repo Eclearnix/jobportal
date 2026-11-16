@@ -7,9 +7,26 @@ export const DEFAULT_RECRUITER_NOTIFICATION_PREFERENCES = {
   teamUpdates: { inApp: true, email: false },
 }
 
+export const DEFAULT_CANDIDATE_NOTIFICATION_PREFERENCES = {
+  jobMatches: { inApp: true, email: false },
+  applicationUpdates: { inApp: true, email: false },
+  interviewReminders: { inApp: true, email: true },
+}
+
 export function normalizeRecruiterNotificationPreferences(preferences = {}) {
   const savedPreferences = preferences || {}
   return Object.fromEntries(Object.entries(DEFAULT_RECRUITER_NOTIFICATION_PREFERENCES).map(([event, defaults]) => [
+    event,
+    {
+      inApp: savedPreferences[event]?.inApp ?? defaults.inApp,
+      email: savedPreferences[event]?.email ?? defaults.email,
+    },
+  ]))
+}
+
+export function normalizeCandidateNotificationPreferences(preferences = {}) {
+  const savedPreferences = preferences || {}
+  return Object.fromEntries(Object.entries(DEFAULT_CANDIDATE_NOTIFICATION_PREFERENCES).map(([event, defaults]) => [
     event,
     {
       inApp: savedPreferences[event]?.inApp ?? defaults.inApp,

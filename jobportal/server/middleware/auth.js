@@ -11,7 +11,7 @@ export async function requireUser(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Session is invalid or expired.' })
   }
-  const user = await User.findById(payload.sub).select('_id email name picture role status company phone location')
+  const user = await User.findById(payload.sub).select('_id email name picture role status company phone location recruiterNotificationPreferences')
   if (!user || user.status !== 'active') return res.status(401).json({ error: 'Session is no longer active.' })
   req.user = user
   return next()
@@ -38,7 +38,7 @@ export async function requireCompanyMember(req, res, next) {
     _id: req.user.company,
     members: req.user._id,
     status: { $ne: 'removed' },
-  }).select('_id name status')
+  }).select('_id name status members timezone')
 
   if (!company) return res.status(403).json({ error: 'Your account is not an active member of an organization.' })
   req.company = company
@@ -50,7 +50,7 @@ export async function requireVerifiedCompany(req, res, next) {
     _id: req.user.company,
     status: 'verified',
     members: req.user._id,
-  }).select('_id name status')
+  }).select('_id name status members timezone')
 
   if (!company) return res.status(403).json({ error: 'A verified organization is required to publish jobs.' })
   req.company = company

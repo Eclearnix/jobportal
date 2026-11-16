@@ -42,7 +42,7 @@ export default function OnboardingPage({ role }) {
             name: form.get('name'),
             website: form.get('website'),
             industry: form.get('industry'),
-            size: form.get('size'),
+            size: form.get('size') ?? '',
             location: form.get('location'),
             description: form.get('description'),
             contactEmail: form.get('contactEmail'),
@@ -91,7 +91,7 @@ export default function OnboardingPage({ role }) {
               </div>
               <div className="form-two-col">
                 <label>Industry<input name="industry" placeholder="Technology" maxLength={120} /></label>
-                <label>Company size<select name="size" defaultValue=""><option value="" disabled>Select company size</option><option>1–10</option><option>11–50</option><option>51–200</option><option>201–1,000</option><option>1,000+</option></select></label>
+                <label>Company size<select name="size" defaultValue=""><option value="">Select company size</option><option>1–10</option><option>11–50</option><option>51–200</option><option>201–1,000</option><option>1,000+</option></select></label>
               </div>
               <label>Organization location<input name="location" placeholder="City, country" maxLength={160} /></label>
               <label>About your organization<textarea name="description" rows="4" placeholder="What should candidates know about your team?" maxLength={3000} /></label>

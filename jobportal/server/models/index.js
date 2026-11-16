@@ -2,6 +2,17 @@ import mongoose from 'mongoose'
 
 const { Schema } = mongoose
 
+const notificationChannelSchema = new Schema({
+  inApp: { type: Boolean, default: true },
+  email: { type: Boolean, default: false },
+}, { _id: false })
+
+const recruiterNotificationPreferencesSchema = new Schema({
+  applicationReceived: { type: notificationChannelSchema, default: () => ({}) },
+  interviewUpdates: { type: notificationChannelSchema, default: () => ({}) },
+  teamUpdates: { type: notificationChannelSchema, default: () => ({}) },
+}, { _id: false })
+
 const userSchema = new Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   googleId: { type: String, unique: true, sparse: true, index: true },
@@ -21,6 +32,7 @@ const userSchema = new Schema({
   openToOpportunities: { type: Boolean, default: false, index: true },
   resumeKey: { type: String, default: '' },
   lastLoginAt: { type: Date },
+  recruiterNotificationPreferences: { type: recruiterNotificationPreferencesSchema, default: () => ({}) },
 }, { timestamps: true, strict: 'throw' })
 
 const companySchema = new Schema({
@@ -30,6 +42,7 @@ const companySchema = new Schema({
   industry: { type: String, trim: true, maxlength: 120, default: '' },
   size: { type: String, trim: true, maxlength: 60, default: '' },
   location: { type: String, trim: true, maxlength: 160, default: '' },
+  timezone: { type: String, trim: true, maxlength: 64, default: 'UTC' },
   description: { type: String, trim: true, maxlength: 3000, default: '' },
   contactEmail: { type: String, lowercase: true, trim: true, default: '' },
   logoKey: { type: String, default: '' },
@@ -73,6 +86,7 @@ const applicationSchema = new Schema({
   coverLetter: { type: String, trim: true, maxlength: 5000, default: '' },
   status: { type: String, enum: ['submitted', 'under_review', 'shortlisted', 'interview_scheduled', 'selected', 'rejected', 'withdrawn'], default: 'submitted', index: true },
   withdrawnAt: { type: Date, default: null },
+  archivedAt: { type: Date, default: null },
 }, { timestamps: true, strict: 'throw' })
 
 applicationSchema.index({ candidate: 1, job: 1 }, { unique: true })

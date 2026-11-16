@@ -5,7 +5,7 @@ Eclearnix Jobs is a role-based job marketplace built with React, Vite, Express, 
 ## Workspaces
 
 - **Job Seeker** — candidate profile and resume, job search, saved jobs, applications, and notifications.
-- **Organization / HR** — organization onboarding and verification, job drafts and publishing, applications, interviews, and team invitations.
+- **Organization / HR** — organization onboarding and verification, job drafts and publishing, applications, interviews, team invitations, per-user notification preferences, and timezone-aware schedules.
 - **Super Admin** — restricted access, organization and user management, job moderation, reports, analytics, master settings, administrator invitations, and audit history.
 
 Super Admin sign-in is provided by the separate `jobportal-superAdmin` frontend. Public sign-in endpoints cannot assign the Super Admin role. A first administrator must be provisioned by an operator with database access.
@@ -15,7 +15,7 @@ Super Admin sign-in is provided by the separate `jobportal-superAdmin` frontend.
 1. Install Node.js 20.19+ and MongoDB Atlas (or a local MongoDB replica set).
 2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a random `JWT_SECRET` of at least 32 characters, `GOOGLE_CLIENT_ID`, and `VITE_GOOGLE_CLIENT_ID`. `CLIENT_ORIGIN` accepts a comma-separated allowlist for the job portal; set `ADMIN_CLIENT_ORIGIN` to the exact origin of the separate Super Admin frontend. Set `PRIMARY_ADMIN_EMAIL` to the designated primary administrator's email. Configure both frontend origins in the Google OAuth web client.
 3. Resume uploads are stored in the MongoDB database configured by `MONGODB_URI`; no separate file-storage account is required. GridFS stores resume files in the `resumes.files` and `resumes.chunks` collections.
-4. To email candidates about scheduled interviews, configure Gmail SMTP in the server `.env` with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. `SMTP_PASSWORD` must be a Google App Password for the Gmail account, not the normal account password. Without these settings, interview scheduling and in-app notifications still work, and the recruiter sees an explicit email delivery warning.
+4. To send team invitations and interview emails, configure Gmail SMTP in the server `.env` with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. `SMTP_PASSWORD` must be a Google App Password for the Gmail account, not the normal account password. The API reports an error if it cannot submit an invitation email to the SMTP server; successful SMTP acceptance does not guarantee inbox placement, so invitees may need to check spam.
 5. Install packages with `npm install`.
 6. Start the API with `npm run server`.
 7. In another terminal, start Vite with `npm run dev`.

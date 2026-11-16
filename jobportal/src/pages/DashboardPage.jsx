@@ -48,7 +48,12 @@ const paths = {
 
 const slug = (value) => value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/(^-|-$)/g, '')
 const humanize = (value = '') => value.replaceAll('_', ' ').replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
-const dateLabel = (value) => value ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+const dateLabel = (value, timeZone) => value ? new Date(value).toLocaleDateString(undefined, {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  ...(timeZone ? { timeZone } : {}),
+}) : '—'
 
 function Loading({ message = 'Loading your workspace…' }) {
   return <div className="workspace-loading" role="status"><span className="loading-spinner" />{message}</div>
@@ -450,19 +455,22 @@ function AdminInvites({ data, reload }) {
   )
 }
 
-function TeamManagement({ data, reload }) {
+function TeamManagement({ data, reload, timeZone }) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function invite(event) {
     event.preventDefault()
     setBusy(true)
     setError('')
+    setMessage('')
     try {
       await api('/recruiter/team-invitations', { method: 'POST', body: { email } })
       setEmail('')
       await reload()
+      setMessage('Invitation email accepted for delivery. Ask your teammate to check their inbox and spam folder.')
     } catch (inviteError) {
       setError(inviteError.message)
     } finally {
@@ -475,13 +483,130 @@ function TeamManagement({ data, reload }) {
       <div className="module-heading"><div><h2>Your hiring team</h2><p>Invite colleagues to share your organization’s hiring workspace.</p></div></div>
       <form className="admin-invite-form" onSubmit={invite}><input aria-label="Team member email" type="email" placeholder="colleague@company.com" value={email} onChange={(event) => setEmail(event.target.value)} required /><button className="green-button" disabled={busy}>{busy ? 'Sending…' : 'Invite teammate'} <ArrowRight size={14} /></button></form>
       {error && <p className="auth-error" role="alert">{error}</p>}
+      {message && <p className="integration-notice" role="status">{message}</p>}
       <DataTable columns={['Name', 'Email', 'Role', 'Status']} rows={(data?.members || []).map((member) => ({
         id: member._id, cells: [member.name, member.email, humanize(member.role), <Pill key="status">{member.status}</Pill>],
       }))} empty="Your organization team will appear here." />
       <h3 className="list-subheading">Pending invitations</h3>
       <DataTable columns={['Email', 'Expires']} rows={(data?.invites || []).map((inviteItem) => ({
-        id: inviteItem._id, cells: [inviteItem.email, dateLabel(inviteItem.expiresAt)],
+        id: inviteItem._id, cells: [inviteItem.email, dateLabel(inviteItem.expiresAt, timeZone)],
       }))} actions={(item) => <button type="button" className="org-action-button org-remove-button" onClick={async () => { await api(`/recruiter/team-invitations/${item.id}`, { method: 'DELETE' }); await reload() }}>Revoke</button>} />
+    </section>
+  )
+}
+
+const defaultRecruiterNotificationPreferences = {
+  applicationReceived: { inApp: true, email: false },
+  interviewUpdates: { inApp: true, email: false },
+  teamUpdates: { inApp: true, email: false },
+}
+
+const recruiterNotificationTypes = [
+  { key: 'applicationReceived', label: 'New applications', detail: 'When a candidate applies to one of your jobs.' },
+  { key: 'interviewUpdates', label: 'Interview updates', detail: 'When another teammate schedules an interview.' },
+  { key: 'teamUpdates', label: 'Team updates', detail: 'When an invited teammate joins your organization.' },
+]
+
+function OrganizationSettings({ settings, reload }) {
+  const [timezone, setTimezone] = useState(settings?.timezone || 'UTC')
+  const [notificationPreferences, setNotificationPreferences] = useState(() => Object.fromEntries(
+    Object.entries(defaultRecruiterNotificationPreferences).map(([key, defaults]) => [
+      key,
+      { ...defaults, ...settings?.notificationPreferences?.[key] },
+    ]),
+  ))
+  const [timezoneError, setTimezoneError] = useState('')
+  const [timezoneMessage, setTimezoneMessage] = useState('')
+  const [notificationError, setNotificationError] = useState('')
+  const [notificationMessage, setNotificationMessage] = useState('')
+  const [savingTimezone, setSavingTimezone] = useState(false)
+  const [savingNotifications, setSavingNotifications] = useState(false)
+
+  async function saveTimezone(event) {
+    event.preventDefault()
+    setTimezoneError('')
+    setTimezoneMessage('')
+    setSavingTimezone(true)
+    try {
+      await api('/recruiter/settings/timezone', { method: 'PATCH', body: { timezone } })
+      await reload({ quiet: true })
+      setTimezoneMessage('Organization timezone saved.')
+    } catch (saveError) {
+      setTimezoneError(saveError.message)
+    } finally {
+      setSavingTimezone(false)
+    }
+  }
+
+  async function saveNotifications(event) {
+    event.preventDefault()
+    setNotificationError('')
+    setNotificationMessage('')
+    setSavingNotifications(true)
+    try {
+      const { notificationPreferences: savedPreferences } = await api('/recruiter/settings/notifications', {
+        method: 'PATCH',
+        body: { notificationPreferences },
+      })
+      setNotificationPreferences(savedPreferences)
+      await reload({ quiet: true })
+      setNotificationMessage('Notification preferences saved.')
+    } catch (saveError) {
+      setNotificationError(saveError.message)
+    } finally {
+      setSavingNotifications(false)
+    }
+  }
+
+  function updateNotificationPreference(eventKey, channel, checked) {
+    setNotificationPreferences((current) => ({
+      ...current,
+      [eventKey]: { ...current[eventKey], [channel]: checked },
+    }))
+  }
+
+  return (
+    <section className="module-section">
+      <div className="module-heading">
+        <div><h2>Organization settings</h2><p>Choose your timezone and how you receive hiring updates.</p></div>
+      </div>
+      <form className="module-form" onSubmit={saveTimezone}>
+        <h3>Organization timezone</h3>
+        <label>
+          IANA timezone
+          <input value={timezone} onChange={(event) => setTimezone(event.target.value)} placeholder="Asia/Kolkata" required />
+          <small>Examples: Asia/Kolkata, America/New_York, Europe/London. Interview times and organization dates use this timezone.</small>
+        </label>
+        {timezoneError && <p className="auth-error" role="alert">{timezoneError}</p>}
+        {timezoneMessage && <p className="integration-notice" role="status">{timezoneMessage}</p>}
+        <button type="submit" className="green-button" disabled={savingTimezone}>{savingTimezone ? 'Saving…' : 'Save timezone'} <ArrowRight size={14} /></button>
+      </form>
+
+      <form className="module-form" onSubmit={saveNotifications}>
+        <h3>Notification preferences</h3>
+        <p>These preferences apply to your HR account, not emails sent to applicants. Email alerts require Gmail SMTP to be configured on the server.</p>
+        <div className="settings-notification-grid">
+          <div className="settings-notification-heading"><span>Update</span><span>In-app</span><span>Email</span></div>
+          {recruiterNotificationTypes.map(({ key, label, detail }) => (
+            <div className="settings-notification-row" key={key}>
+              <div><strong>{label}</strong><small>{detail}</small></div>
+              {['inApp', 'email'].map((channel) => (
+                <label className="checkbox-field" key={channel}>
+                  <input
+                    type="checkbox"
+                    checked={notificationPreferences[key][channel]}
+                    onChange={(event) => updateNotificationPreference(key, channel, event.target.checked)}
+                    aria-label={`${label} ${channel === 'inApp' ? 'in-app' : 'email'} notification`}
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+        {notificationError && <p className="auth-error" role="alert">{notificationError}</p>}
+        {notificationMessage && <p className="integration-notice" role="status">{notificationMessage}</p>}
+        <button type="submit" className="green-button" disabled={savingNotifications}>{savingNotifications ? 'Saving…' : 'Save notification preferences'} <ArrowRight size={14} /></button>
+      </form>
     </section>
   )
 }
@@ -500,6 +625,7 @@ function DashboardWorkspace({ role }) {
   const [profileSaveMessage, setProfileSaveMessage] = useState('')
   const [jobPostMessage, setJobPostMessage] = useState('')
   const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const [showArchivedApplications, setShowArchivedApplications] = useState(false)
   const [today] = useState(() => new Date())
   const navItems = navigation[role]
   const activePage = navItems.find(([label]) => slug(label) === section)?.[0] || 'Overview'
@@ -534,14 +660,14 @@ function DashboardWorkspace({ role }) {
         } else if (role === 'recruiter') {
           const endpoint = {
             'Manage Jobs': '/recruiter/jobs',
-            Applications: '/recruiter/applications',
+            Applications: `/recruiter/applications${showArchivedApplications ? '?archived=true' : ''}`,
             Candidates: '/recruiter/candidates',
             'Discover Candidates': '/recruiter/discoverable-candidates',
             Interviews: '/recruiter/interviews',
             'Company Profile': '/dashboard/recruiter',
             'Team Management': '/recruiter/team',
             Notifications: '/recruiter/notifications',
-            Settings: '/dashboard/recruiter',
+            Settings: '/recruiter/settings',
           }[activePage]
           if (activePage !== 'Post a Job') nextView = await api(endpoint)
         } else {
@@ -568,7 +694,7 @@ function DashboardWorkspace({ role }) {
     } finally {
       if (!quiet) setLoading(false)
     }
-  }, [activePage, navigate, role])
+  }, [activePage, navigate, role, showArchivedApplications])
 
   const refreshAfterProfileSave = useCallback(async () => {
     await reload({ quiet: true })
@@ -650,6 +776,7 @@ function DashboardWorkspace({ role }) {
   const isCandidate = role === 'candidate'
   const isRecruiter = role === 'recruiter'
   const isAdmin = role === 'super_admin'
+  const organizationTimeZone = isRecruiter ? payload?.company?.timezone || 'UTC' : undefined
 
   async function saveJob(jobId) {
     await api(`/candidate/saved-jobs/${jobId}`, { method: 'POST', body: {} })
@@ -685,19 +812,19 @@ function DashboardWorkspace({ role }) {
   } else if (activePage === 'Notifications' && (isCandidate || isRecruiter || isAdmin)) {
     const notificationBase = isCandidate ? '/candidate' : isRecruiter ? '/recruiter' : '/admin'
     table = <DataTable columns={['Notification', 'Message', 'Date']} rows={(viewData?.items || []).map((item) => ({
-      id: item._id, cells: [item.title, item.message, dateLabel(item.createdAt)], resource: item,
+      id: item._id, cells: [item.title, item.message, dateLabel(item.createdAt, organizationTimeZone)], resource: item,
     }))} actions={(row) => row.resource.readAt ? 'Read' : <button type="button" className="org-action-button" onClick={() => mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>} empty="You’re all caught up." />
   } else if (isRecruiter && ['Manage Jobs', 'Applications', 'Candidates'].includes(activePage)) {
     const rows = activePage === 'Manage Jobs'
       ? (viewData?.items || []).map((job) => ({
         id: job._id,
-        cells: [job.title, humanize(job.status), job.location, dateLabel(job.createdAt)],
+        cells: [job.title, humanize(job.status), job.location, dateLabel(job.createdAt, organizationTimeZone)],
         resource: job,
       }))
       : activePage === 'Applications'
         ? (viewData?.items || []).map((item) => ({
           id: item._id,
-          cells: [item.candidate?.name, item.job?.title, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)],
+          cells: [item.candidate?.name, item.job?.title, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt, organizationTimeZone)],
           resource: item,
         }))
         : (viewData?.items || []).map((item) => ({
@@ -723,8 +850,13 @@ function DashboardWorkspace({ role }) {
         </div>
         : activePage === 'Candidates'
           ? <div className="application-actions"><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate._id)}>View profile</button>{row.resource.applications[0] && <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.resource.applications[0].id)}>Resume</button>}</div>
-          : <div className="application-actions"><select className="application-status-select" aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button><button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button></div>}
-      empty="No records to show yet."
+          : <div className="application-actions">
+            {!showArchivedApplications && <select className="application-status-select" aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select>}
+            <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button>
+            <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button>
+            <button type="button" className="org-action-button" aria-label={`${showArchivedApplications ? 'Restore' : 'Archive'} application for ${row.resource.candidate?.name || 'candidate'}`} onClick={() => mutate(() => api(`/recruiter/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: !showArchivedApplications } }))}>{showArchivedApplications ? 'Restore' : 'Archive'}</button>
+          </div>}
+      empty={showArchivedApplications ? 'No archived applications.' : 'No records to show yet.'}
     />
   } else if (isRecruiter && activePage === 'Discover Candidates') {
     table = <DataTable columns={['Candidate', 'Headline', 'Location', 'Skills']} rows={(viewData?.items || []).map((candidate) => ({
@@ -735,7 +867,7 @@ function DashboardWorkspace({ role }) {
   } else if (isRecruiter && activePage === 'Interviews') {
     table = <DataTable columns={['Candidate', 'Job', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,
-      cells: [item.candidate?.name, item.application?.job?.title, new Date(item.scheduledAt).toLocaleString(), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : '—'],
+      cells: [item.candidate?.name, item.application?.job?.title, new Date(item.scheduledAt).toLocaleString(undefined, { timeZone: organizationTimeZone || 'UTC', timeZoneName: 'short' }), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : '—'],
       resource: item,
     }))} empty="Scheduled interviews will appear here." />
   } else if (isAdmin && activePage === 'Organization Management' || isAdmin && activePage === 'Verification Requests') {
@@ -815,7 +947,7 @@ function DashboardWorkspace({ role }) {
                 <section className="data-card"><div className="card-heading"><div><h2>Recent applications</h2><p>Keep track of the roles you’ve applied for.</p></div><button className="subtle-button" type="button" onClick={() => goTo('My Applications')}>View all <ArrowRight size={13} /></button></div><DataTable columns={['Position', 'Organization', 'Status', 'Applied']} rows={(payload.recentApplications || []).map((item) => ({ id: item._id, cells: [item.job?.title, item.company?.name, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)] }))} empty="Your applications will appear here." /></section>
                 <aside className="side-stack"><article className="progress-card"><div className="progress-heading"><div><span>Profile strength</span><strong>{payload.summary.profileStrength}%</strong></div></div><div className="progress-track"><span style={{ width: `${payload.summary.profileStrength}%` }} /></div><p>A complete profile helps organizations understand what you bring.</p><button type="button" onClick={() => goTo('My Profile')}>Update profile <ArrowRight size={13} /></button></article><article className="spotlight-card"><h3>Recommended jobs</h3>{payload.recommendedJobs?.length ? payload.recommendedJobs.slice(0, 3).map((job) => <button type="button" className="recommended-job" key={job._id} onClick={() => navigate(`/jobs/${job._id}`)}><strong>{job.title}</strong><span>{job.company?.name} · {job.location}</span></button>) : <p>Add skills to your profile to get more relevant recommendations.</p>}</article></aside>
               </div>}
-              {isRecruiter && <div className="dashboard-lower"><section className="data-card"><div className="card-heading"><div><h2>Latest applicants</h2><p>Applications received for your organization’s jobs.</p></div><button className="subtle-button" type="button" onClick={() => goTo('Applications')}>View all <ArrowRight size={13} /></button></div><DataTable columns={['Candidate', 'Position', 'Stage', 'Received']} rows={(payload.recentApplications || []).map((item) => ({ id: item._id, cells: [item.candidate?.name, item.job?.title, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)] }))} empty="New applications will appear here." /></section><article className="spotlight-card"><h3>Organization status</h3><Pill>{payload.company?.status}</Pill><p>{payload.company?.status === 'verified' ? 'Your organization can publish jobs.' : 'You can manage drafts while your verification is reviewed.'}</p><button type="button" onClick={() => goTo('Company Profile')}>View company profile <ArrowRight size={13} /></button></article></div>}
+              {isRecruiter && <div className="dashboard-lower"><section className="data-card"><div className="card-heading"><div><h2>Latest applicants</h2><p>Applications received for your organization’s jobs.</p></div><button className="subtle-button" type="button" onClick={() => goTo('Applications')}>View all <ArrowRight size={13} /></button></div><DataTable columns={['Candidate', 'Position', 'Stage', 'Received']} rows={(payload.recentApplications || []).map((item) => ({ id: item._id, cells: [item.candidate?.name, item.job?.title, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt, organizationTimeZone)] }))} empty="New applications will appear here." /></section><article className="spotlight-card"><h3>Organization status</h3><Pill>{payload.company?.status}</Pill><p>{payload.company?.status === 'verified' ? 'Your organization can publish jobs.' : 'You can manage drafts while your verification is reviewed.'}</p><button type="button" onClick={() => goTo('Company Profile')}>View company profile <ArrowRight size={13} /></button></article></div>}
               {isAdmin && <div className="dashboard-lower"><section className="data-card"><div className="card-heading"><div><h2>Organizations needing review</h2><p>Help keep the marketplace trustworthy.</p></div><button className="subtle-button" type="button" onClick={() => goTo('Verification Requests')}>Review queue <ArrowRight size={13} /></button></div><AdminOrganizationTable rows={viewData?.items || []} onAction={mutate} /></section><article className="spotlight-card"><h3>Platform controls</h3><p>Manage organizations, job listings, people, and shared marketplace settings.</p><button type="button" onClick={() => goTo('Organization Management')}>Manage platform <ArrowRight size={13} /></button></article></div>}
             </>
           )}
@@ -830,11 +962,27 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && isCandidate && activePage === 'My Profile' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
           {!loading && !error && isCandidate && activePage === 'Resume' && <CandidateResume profile={viewData?.profile} onSaved={reload} />}
           {!loading && !error && isAdmin && activePage === 'Settings' && <SuperAdminSettings settings={viewData?.items || []} reload={reload} />}
+          {!loading && !error && isRecruiter && activePage === 'Settings' && <OrganizationSettings settings={viewData} reload={reload} />}
           {!loading && !error && isAdmin && activePage === 'Admin Management' && <AdminInvites data={viewData} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Company Profile' && <CompanyProfile company={viewData?.company} onSaved={reload} />}
           {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
-          {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} />}
-          {!loading && !error && table && <section className="module-section">{canSearch && <div className="module-heading"><div><h2>{activePage}</h2><p>Search and manage workspace records.</p></div><input className="module-search" aria-label={`Filter ${activePage}`} placeholder="Filter results…" value={search} onChange={(event) => setSearch(event.target.value)} /></div>}{filteredTable}</section>}
+          {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} timeZone={organizationTimeZone} />}
+          {!loading && !error && table && <section className="module-section">
+            {(canSearch || isRecruiter && activePage === 'Applications') && <div className="module-heading">
+              <div>
+                <h2>{activePage === 'Applications' && showArchivedApplications ? 'Archived applications' : activePage}</h2>
+                <p>{activePage === 'Applications'
+                  ? showArchivedApplications
+                    ? 'Archived applications are hidden from the active list and can be restored.'
+                    : 'Review and manage applications for your organization’s jobs.'
+                  : 'Search and manage workspace records.'}</p>
+              </div>
+              {isRecruiter && activePage === 'Applications'
+                ? <button className="subtle-button" type="button" onClick={() => setShowArchivedApplications((current) => !current)}>{showArchivedApplications ? 'View active applications' : 'View archived applications'}</button>
+                : canSearch && <input className="module-search" aria-label={`Filter ${activePage}`} placeholder="Filter results…" value={search} onChange={(event) => setSearch(event.target.value)} />}
+            </div>}
+            {filteredTable}
+          </section>}
 
           <footer className="dashboard-footer"><span>Made for better work, together.</span><span>Signed in as {user.email}</span></footer>
         </div>

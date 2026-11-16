@@ -2401,6 +2401,64 @@ button {
   background: white;
 }
 
+.settings-notification-grid {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.settings-notification-heading,
+.settings-notification-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px 68px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+}
+
+.settings-notification-heading {
+  color: var(--theme-secondary-text, #536158);
+  background: var(--theme-active, #f6f8f6);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.settings-notification-heading span:not(:first-child) {
+  text-align: center;
+}
+
+.settings-notification-row {
+  border-top: 1px solid var(--line);
+}
+
+.settings-notification-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-notification-row strong {
+  color: var(--theme-text, #344239);
+  font-size: 10px;
+}
+
+.settings-notification-row small {
+  color: var(--theme-secondary-text, #77827d);
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.settings-notification-row .checkbox-field {
+  justify-content: center;
+  margin: 0;
+}
+
+.settings-notification-row .checkbox-field input {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+}
+
 .form-submit-row {
   display: flex;
   justify-content: flex-end;

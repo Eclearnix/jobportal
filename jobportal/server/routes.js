@@ -20,11 +20,18 @@ import {
 } from './models/index.js'
 import { requireCompanyMember, requirePrimaryAdmin, requireRoles, requireUser } from './middleware/auth.js'
 import { savePrivateFile, streamPrivateFile } from './storage.js'
-import { sendInterviewEmail } from './email.js'
+import { sendCompanyInvitationEmail, sendInterviewEmail } from './email.js'
+import { normalizeRecruiterNotificationPreferences, notifyRecruiterMembers } from './notifications.js'
 
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase() || null
+const notificationChannelInput = z.object({ inApp: z.boolean(), email: z.boolean() }).strict()
+const recruiterNotificationPreferencesInput = z.object({
+  applicationReceived: notificationChannelInput,
+  interviewUpdates: notificationChannelInput,
+  teamUpdates: notificationChannelInput,
+}).strict()
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -37,6 +44,16 @@ const upload = multer({
     return callback(null, true)
   },
 })
+
+function getRecruiterNotificationsUrl(req) {
+  const origin = req.get('origin') || process.env.CLIENT_ORIGIN?.split(',')[0]
+  try {
+    const url = new URL('/organization/notifications', origin)
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
+  } catch {
+    return ''
+  }
+}
 
 router.get('/recruiter/team', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const [members, invites] = await Promise.all([
@@ -58,7 +75,32 @@ router.post('/recruiter/team-invitations', requireUser, requireRoles('recruiter'
     { email: normalizedEmail, company: req.company._id, invitedBy: req.user._id, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
     { upsert: true, new: true, runValidators: true },
   )
-  res.status(201).json({ invite })
+  const configuredOrigin = req.get('origin') || process.env.CLIENT_ORIGIN?.split(',')[0]
+  let loginUrl = ''
+  try {
+    if (configuredOrigin) loginUrl = new URL('/login', configuredOrigin).href
+  } catch {
+    loginUrl = ''
+  }
+
+  let emailResult
+  try {
+    emailResult = await sendCompanyInvitationEmail({
+      to: normalizedEmail,
+      companyName: req.company.name,
+      invitedByName: req.user.name,
+      loginUrl,
+    })
+  } catch (error) {
+    console.error('Team invitation email delivery failed:', error)
+    return res.status(502).json({ error: 'The invitation was saved, but the email could not be sent. Check the API server logs and try again.' })
+  }
+  if (!emailResult.sent) {
+    console.error(`Team invitation email was not sent: ${emailResult.error}`)
+    return res.status(503).json({ error: `The invitation was saved, but the email could not be sent. ${emailResult.error}` })
+  }
+
+  res.status(201).json({ invite, emailSent: true })
 })
 
 router.delete('/recruiter/team-invitations/:inviteId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -66,6 +108,43 @@ router.delete('/recruiter/team-invitations/:inviteId', requireUser, requireRoles
   const result = await CompanyInvite.deleteOne({ _id: id, company: req.company._id })
   if (!result.deletedCount) return res.status(404).json({ error: 'Invitation not found.' })
   res.status(204).end()
+})
+
+router.get('/recruiter/settings', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  res.json({
+    timezone: req.company.timezone || 'UTC',
+    notificationPreferences: normalizeRecruiterNotificationPreferences(req.user.recruiterNotificationPreferences),
+  })
+})
+
+router.patch('/recruiter/settings/timezone', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const { timezone } = validate(z.object({ timezone: z.string().trim().min(1).max(64) }).strict(), req.body)
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone })
+  } catch {
+    return res.status(400).json({ error: 'Enter a valid IANA timezone, such as Asia/Kolkata or America/New_York.' })
+  }
+
+  const company = await Company.findOneAndUpdate(
+    { _id: req.company._id },
+    { $set: { timezone } },
+    { new: true, runValidators: true },
+  ).select('timezone')
+  if (!company) return res.status(404).json({ error: 'Organization not found.' })
+  res.json({ timezone: company.timezone })
+})
+
+router.patch('/recruiter/settings/notifications', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const { notificationPreferences } = validate(z.object({
+    notificationPreferences: recruiterNotificationPreferencesInput,
+  }).strict(), req.body)
+  const user = await User.findOneAndUpdate(
+    { _id: req.user._id, company: req.company._id },
+    { $set: { recruiterNotificationPreferences: notificationPreferences } },
+    { new: true, runValidators: true },
+  ).select('recruiterNotificationPreferences').lean()
+  if (!user) return res.status(404).json({ error: 'Organization member not found.' })
+  res.json({ notificationPreferences: normalizeRecruiterNotificationPreferences(user.recruiterNotificationPreferences) })
 })
 
 router.patch('/recruiter/company', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -218,6 +297,7 @@ async function authenticateGoogle(req, res, intendedRole) {
     error.status = 403
     throw error
   }
+  let acceptedCompany = null
   if (companyInvite) {
     if (user.company && String(user.company) !== String(companyInvite.company)) {
       const error = new Error('This account already belongs to a different organization.')
@@ -234,8 +314,24 @@ async function authenticateGoogle(req, res, intendedRole) {
     company.members.addToSet(user._id)
     await company.save()
     await CompanyInvite.deleteOne({ _id: companyInvite._id })
+    acceptedCompany = company
   }
   await user.save()
+  if (companyInvite && acceptedCompany) {
+    await notifyRecruiterMembers({
+      memberIds: [companyInvite.invitedBy],
+      companyId: acceptedCompany._id,
+      excludeUserId: user._id,
+      preferenceKey: 'teamUpdates',
+      type: 'team_member_joined',
+      title: 'Teammate joined',
+      message: `${user.name} accepted the invitation and joined ${acceptedCompany.name}.`,
+      subject: `${user.name} joined ${acceptedCompany.name}`,
+      companyName: acceptedCompany.name,
+      loginUrl: getRecruiterNotificationsUrl(req),
+      relatedId: acceptedCompany._id,
+    })
+  }
   issueSession(user, res)
   return user
 }
@@ -390,9 +486,9 @@ router.get('/candidate/applications', requireUser, requireRoles('candidate'), as
 
 router.post('/jobs/:jobId/applications', requireUser, requireRoles('candidate'), upload.single('resume'), async (req, res) => {
   const jobId = validate(objectId, req.params.jobId)
-  const job = await Job.findOne({ _id: jobId, status: 'published' }).populate('company', 'status')
+  const job = await Job.findOne({ _id: jobId, status: 'published' }).populate('company', 'status name members')
   if (!job || job.company.status !== 'verified') return res.status(404).json({ error: 'This job is no longer available.' })
-  const candidate = await User.findById(req.user._id).select('resumeKey')
+  const candidate = await User.findById(req.user._id).select('resumeKey name')
   validateFileSignature(req.file)
   const resumeKey = req.file ? await savePrivateFile(req.file, `resumes/${candidate.id}`) : candidate.resumeKey
   if (!resumeKey) return res.status(400).json({ error: 'Upload a resume before applying.' })
@@ -400,6 +496,18 @@ router.post('/jobs/:jobId/applications', requireUser, requireRoles('candidate'),
   try {
     const application = await Application.create({ candidate: candidate._id, job: job._id, company: job.company._id, resumeKey, coverLetter: input.coverLetter })
     await Notification.create({ user: candidate._id, type: 'application_submitted', title: 'Application submitted', message: `Your application for ${job.title} was submitted.`, relatedId: application._id })
+    await notifyRecruiterMembers({
+      memberIds: job.company.members,
+      companyId: job.company._id,
+      preferenceKey: 'applicationReceived',
+      type: 'application_received',
+      title: 'New application received',
+      message: `${candidate.name} applied for ${job.title}.`,
+      subject: `New application for ${job.title}`,
+      companyName: job.company.name,
+      loginUrl: getRecruiterNotificationsUrl(req),
+      relatedId: application._id,
+    })
     res.status(201).json({ application })
   } catch (error) {
     if (error.code === 11000) return res.status(409).json({ error: 'You have already applied for this job.' })
@@ -562,7 +670,7 @@ router.post('/organizations', requireUser, requireRoles('recruiter'), async (req
     name: z.string().trim().min(2).max(160),
     website: z.string().trim().url().max(240).or(z.literal('')).optional().default(''),
     industry: z.string().trim().max(120).optional().default(''),
-    size: z.string().trim().max(60).optional().default(''),
+    size: z.string().trim().max(60).nullish().transform((value) => value ?? ''),
     location: z.string().trim().max(160).optional().default(''),
     description: z.string().trim().max(3000).optional().default(''),
     contactEmail: z.string().email().max(240),
@@ -657,11 +765,27 @@ router.patch('/recruiter/jobs/:jobId/status', requireUser, requireRoles('recruit
 
 router.get('/recruiter/applications', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const { page, limit, skip } = toPage(req.query)
+  const query = {
+    company: req.company._id,
+    archivedAt: req.query.archived === 'true' ? { $ne: null } : null,
+  }
   const [items, total] = await Promise.all([
-    Application.find({ company: req.user.company }).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('candidate', 'name email picture title location skills').populate('job', 'title').lean(),
-    Application.countDocuments({ company: req.user.company }),
+    Application.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('candidate', 'name email picture title location skills').populate('job', 'title').lean(),
+    Application.countDocuments(query),
   ])
   res.json({ items, page, limit, total, pages: Math.ceil(total / limit) })
+})
+
+router.patch('/recruiter/applications/:applicationId/archive', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const id = validate(objectId, req.params.applicationId)
+  const { archived } = validate(z.object({ archived: z.boolean() }), req.body)
+  const application = await Application.findOneAndUpdate(
+    { _id: id, company: req.company._id },
+    { $set: { archivedAt: archived ? new Date() : null } },
+    { new: true, runValidators: true },
+  )
+  if (!application) return res.status(404).json({ error: 'Application not found.' })
+  res.status(204).end()
 })
 
 router.patch('/recruiter/applications/:applicationId/status', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -688,7 +812,11 @@ router.post('/recruiter/applications/:applicationId/interviews', requireUser, re
   const interview = await Interview.create({ ...input, scheduledAt: new Date(input.scheduledAt), candidate: application.candidate._id, company: application.company, application: application._id })
   application.status = 'interview_scheduled'
   await application.save()
-  await Notification.create({ user: application.candidate._id, type: 'interview_scheduled', title: 'Interview scheduled', message: `An interview has been scheduled for ${new Date(input.scheduledAt).toLocaleString()}.`, relatedId: interview._id })
+  const interviewTime = interview.scheduledAt.toLocaleString('en-US', {
+    timeZone: req.company.timezone || 'UTC',
+    timeZoneName: 'short',
+  })
+  await Notification.create({ user: application.candidate._id, type: 'interview_scheduled', title: 'Interview scheduled', message: `An interview has been scheduled for ${interviewTime}.`, relatedId: interview._id })
   let emailResult
   try {
     emailResult = await sendInterviewEmail({
@@ -700,12 +828,26 @@ router.post('/recruiter/applications/:applicationId/interviews', requireUser, re
       durationMinutes: interview.durationMinutes,
       meetingUrl: interview.meetingUrl,
       notes: interview.notes,
+      timeZone: req.company.timezone || 'UTC',
     })
   } catch (error) {
     console.error('Interview email delivery failed:', error)
     emailResult = { sent: false, error: 'The interview is scheduled and the in-app notification was created, but email delivery failed. Check the API server logs.' }
   }
   if (!emailResult.sent) console.error(`Interview email was not sent: ${emailResult.error}`)
+  await notifyRecruiterMembers({
+    memberIds: req.company.members,
+    companyId: req.company._id,
+    excludeUserId: req.user._id,
+    preferenceKey: 'interviewUpdates',
+    type: 'interview_scheduled',
+    title: 'Interview scheduled',
+    message: `An interview was scheduled with ${application.candidate.name} for ${application.job.title} at ${interviewTime}.`,
+    subject: `Interview scheduled for ${application.candidate.name}`,
+    companyName: req.company.name,
+    loginUrl: getRecruiterNotificationsUrl(req),
+    relatedId: interview._id,
+  })
   res.status(201).json({ interview, emailSent: emailResult.sent, emailError: emailResult.error || '' })
 })
 

@@ -1,9 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700&display=swap');
+
 :root {
-  font-family: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   line-height: 1.5;
   font-weight: 400;
-  color: #f8fafc;
-  background: #080d0c;
+  color-scheme: light;
+  color: #172B4D;
+  background: #F5F9FF;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,8 +26,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #080d0c;
-  zoom: 1.2;
+  background: #F5F9FF;
 }
 
 button,
@@ -35,7 +37,7 @@ input {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 3px solid rgba(110, 231, 183, 0.45);
+  outline: 3px solid rgba(59, 130, 246, 0.45);
   outline-offset: 2px;
 }
 

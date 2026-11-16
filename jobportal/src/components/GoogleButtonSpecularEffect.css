@@ -1,8 +1,6 @@
 .google-signin > .google-specular-effect {
- /* --google-shine-color: #000000;
---google-shine-base-color: #FFFFFF; */
-  --google-shine-color: #E5E7EB;
---google-shine-base-color: #111111;
+  --google-shine-color: #93C5FD;
+  --google-shine-base-color: #FFFFFF;
   --google-shine-intensity: 0.9;
   --google-shine-idle-intensity: 0.2;
   --google-shine-press-intensity: 0.7;

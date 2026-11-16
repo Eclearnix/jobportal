@@ -44,12 +44,16 @@ export default function LoginPage() {
     <main className="login-page">
       <MicroSlats
         className="login-background-animation"
-        style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
         preset="swell"
-        color="#4a4646"
-        // glintColor="#ffffff4b"
-        glintColor="#ffffff4b"
-        backgroundColor="#000000"
+        color="#DBEAFE"
+        glintColor="#38BDF8CC"
+        backgroundColor="#F5F9FF"
         slatWidth={100}
         slatHeight={130}
         gap={3}
@@ -57,31 +61,23 @@ export default function LoginPage() {
         interactive={false}
         intro
       />
-
-     {/* <MicroSlats
-  className="login-background-animation"
-  style={{
-    position: 'absolute',
-    inset: 0,
-    zIndex: 1,
-    pointerEvents: 'none'
-  }}
-  preset="swell"
-  color="#164E9A"
-  glintColor="#BFDBFE"
-  backgroundColor="#050B18"
-  slatWidth={100}
-  slatHeight={130}
-  gap={3}
-  roundness={0.75}
-  interactive={false}
-  intro
-/> */}
       <aside className="welcome-panel">
         <Brand />
         <div className="welcome-content">
           <div className="welcome-kicker"><span className="welcome-dot" /> Your hiring platform, all in one place</div>
-          <h1>Better work starts with the right people.</h1>
+          <h1>
+            Better work starts with the <span className="hero-highlight">right
+              <svg className="hero-highlight-underline" viewBox="0 0 120 14" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                <defs>
+                  <linearGradient id="hero-right-underline-gradient" x1="0" y1="0" x2="120" y2="0" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stopColor="#60A5FA" />
+                    <stop offset="1" stopColor="#2563EB" />
+                  </linearGradient>
+                </defs>
+                <path d="M1 10 L119 10" fill="none" stroke="url(#hero-right-underline-gradient)" strokeWidth="4" strokeLinecap="round" />
+              </svg>
+            </span> people.
+          </h1>
           <p>One workspace for your career, your team, or the people keeping the whole marketplace moving.</p>
           <div className="welcome-note">
             <div className="welcome-note-icon"><ShieldCheck size={19} /></div>

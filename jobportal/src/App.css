@@ -1,16 +1,38 @@
 :root {
-  --green-900: #064e3b;
-  --green-800: #075e45;
-  --green-700: #087f5b;
-  --green-600: #0c9b6b;
-  --green-100: #e8f7ef;
-  --green-50: #f3fbf6;
-  --ink: #1d2924;
-  --muted: #78827d;
-  --line: #e9eeeb;
-  --surface: #fff;
-  --canvas: #f7f9f7;
-  --shadow: 0 16px 48px rgba(27, 52, 40, 0.08);
+  --blue-900: #1E3A8A;
+  --blue-800: #1D4ED8;
+  --blue-700: #2563EB;
+  --blue-600: #3B82F6;
+  --sky-blue: #60A5FA;
+  --cyan: #38BDF8;
+  --blue-100: #DBEAFE;
+  --blue-50: #EFF6FF;
+  --soft-blue: #EAF3FF;
+  --blue-border: #BFDBFE;
+  --blue-glow: rgba(59, 130, 246, 0.16);
+  --ink: #172B4D;
+  --navy-deep: #142746;
+  --muted: #64748B;
+  --text-secondary: #52647A;
+  --text-light: #94A3B8;
+  --text-accent: #2563EB;
+  --text-inverse: #FFFFFF;
+  --font-heading: 'Manrope', 'Inter', sans-serif;
+  --font-body: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --line: #DCE6F2;
+  --surface: #FFFFFF;
+  --surface-light: #F8FAFC;
+  --canvas: #F5F9FF;
+  --shadow: 0 16px 48px rgba(37, 99, 235, 0.08);
+  --card-shadow: 0 16px 48px rgba(30, 58, 138, 0.07);
+  --brand-emerald: #059669;
+
+  --green-900: var(--blue-900);
+  --green-800: var(--blue-800);
+  --green-700: var(--blue-700);
+  --green-600: var(--blue-600);
+  --green-100: var(--blue-100);
+  --green-50: var(--blue-50);
 }
 
 button,
@@ -64,7 +86,7 @@ button {
   flex-wrap: wrap;
   min-height: 100vh;
   overflow: hidden;
-  background: #000000 !important;
+  background: var(--canvas) !important;
 }
 
 .login-page::before {
@@ -72,7 +94,7 @@ button {
   position: absolute;
   z-index: 0;
   inset: 0;
-  background: #000000;
+  background: var(--canvas);
   pointer-events: none;
 }
 
@@ -132,18 +154,52 @@ button {
 .welcome-content h1 {
   max-width: 460px;
   margin: 24px 0 17px;
-  color: #f3faf5;
-  font-size: clamp(42px, 5vw, 62px);
-  line-height: 1.04;
-  letter-spacing: -3.2px;
-  font-weight: 650;
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: 64px;
+  line-height: 1.12;
+  letter-spacing: -0.045em;
+  font-weight: 700;
+}
+
+.hero-highlight {
+  position: relative;
+  display: inline-block;
+  color: var(--blue-700);
+  white-space: nowrap;
+}
+
+.hero-highlight-underline {
+  position: absolute;
+  left: -0.08em;
+  bottom: 0;
+  width: calc(100% + 0.16em);
+  height: 0.18em;
+  overflow: visible;
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: hero-underline-draw 850ms cubic-bezier(0.22, 1, 0.36, 1) 250ms both;
+}
+
+@keyframes hero-underline-draw {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-highlight-underline {
+    transform: none;
+    animation: none;
+  }
 }
 
 .welcome-content > p {
   max-width: 420px;
-  color: #c4d2c8;
+  color: var(--text-secondary);
   font-size: 16px;
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
 .welcome-note {
@@ -201,21 +257,21 @@ button {
 }
 
 .welcome-note strong {
-  color: #24352b;
-  font-size: 12px;
+  color: var(--ink);
+  font-size: 14px;
 }
 
 .welcome-note small {
   margin-top: 3px;
-  color: #819087;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .welcome-footer {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: #a7b8ad;
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -242,7 +298,7 @@ button {
   align-items: center;
   justify-content: flex-end;
   gap: 9px;
-  color: #c5d0ca;
+  color: #475569;
   font-size: 12px;
 }
 
@@ -285,16 +341,18 @@ button {
 
 .login-heading h2 {
   margin: 0;
-  color: #f3faf5;
-  font-size: 34px;
-  letter-spacing: -1.6px;
-  font-weight: 650;
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: 38px;
+  letter-spacing: -0.035em;
+  font-weight: 700;
 }
 
 .login-heading p {
   margin: 8px 0 0;
-  color: #c5d0ca;
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .role-picker {
@@ -312,19 +370,20 @@ button {
   color: var(--ink);
   text-align: left;
   background: white;
-  border: 1px solid #e6ebe8;
-  border-radius: 12px;
-  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  border: 1px solid var(--blue-border);
+  border-radius: 20px;
+  transition: border-color 250ms ease, background 250ms ease, box-shadow 250ms ease, transform 250ms ease;
 }
 
 .role-option:hover {
-  border-color: #b7d9c4;
+  border-color: var(--sky-blue);
+  transform: translateY(-2px);
 }
 
 .role-option-active {
-  border-color: #50a878;
-  background: #f6fbf7;
-  box-shadow: 0 0 0 2px rgba(35, 148, 88, 0.08);
+  border-color: var(--blue-600);
+  background: var(--blue-50);
+  box-shadow: 0 0 0 3px var(--blue-glow), 0 12px 30px rgba(37, 99, 235, 0.08);
 }
 
 .role-option-icon {
@@ -333,8 +392,8 @@ button {
   flex: 0 0 36px;
   height: 36px;
   border-radius: 10px;
-  background: #eff7f1;
-  color: var(--green-700);
+  background: var(--soft-blue);
+  color: var(--blue-700);
   font-size: 17px;
   font-weight: 700;
 }
@@ -356,14 +415,15 @@ button {
 
 .role-option-copy small {
   margin-top: 2px;
-  color: #838d87;
-  font-size: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .role-radio {
   width: 16px;
   height: 16px;
-  border: 1px solid #d5ddd8;
+  border: 1px solid var(--blue-border);
   border-radius: 50%;
   position: relative;
 }
@@ -393,7 +453,7 @@ button {
 
 .admin-note span {
   color: #8c812c;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .login-form {
@@ -452,8 +512,8 @@ button {
   height: 45px;
   border-radius: 9px;
   font-size: 12px;
-  font-weight: 700;
-  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  font-weight: 600;
+  transition: transform 200ms ease, background 200ms ease, box-shadow 200ms ease;
 }
 
 .login-submit {
@@ -1827,7 +1887,7 @@ button {
   z-index: 0;
   border-radius: 7px;
   padding: 1px;
-  background: radial-gradient(circle 72px at var(--google-light-x) var(--google-light-y), #ffffff, #68dda9 35%, rgba(255, 255, 255, 0.28) 68%, transparent 100%);
+  background: radial-gradient(circle 72px at var(--google-light-x) var(--google-light-y), #ffffff, var(--cyan) 35%, rgba(255, 255, 255, 0.28) 68%, transparent 100%);
   opacity: 0;
   pointer-events: none;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -1838,7 +1898,7 @@ button {
 }
 
 .google-signin-hover {
-  border-color: rgba(255, 255, 255, 0.72);
+  border-color: #93C5FD;
 }
 
 .google-signin-hover::before {
@@ -4614,23 +4674,23 @@ body,
   }
 }
 
-/* Carbon & Platinum unified theme. */
+/* Shared luxury SaaS color tokens. */
 :root {
-  --carbon-bg: #0A0A0B;
-  --carbon-sidebar: #101012;
-  --carbon-navbar: #18181B;
-  --carbon-card: #202024;
-  --carbon-elevated: #29292E;
-  --carbon-input: #18181B;
-  --carbon-accent: #D4D4D8;
-  --carbon-accent-hover: #A1A1AA;
-  --carbon-secondary: #A3A3A3;
-  --carbon-light: #E4E4E7;
-  --carbon-text: #FAFAFA;
-  --carbon-secondary-text: #C4C4CC;
-  --carbon-muted: #85858D;
-  --carbon-border: #35353A;
-  --carbon-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  --carbon-bg: var(--canvas);
+  --carbon-sidebar: var(--surface);
+  --carbon-navbar: var(--surface);
+  --carbon-card: var(--surface);
+  --carbon-elevated: var(--blue-50);
+  --carbon-input: var(--surface);
+  --carbon-accent: var(--blue-700);
+  --carbon-accent-hover: var(--blue-800);
+  --carbon-secondary: var(--blue-600);
+  --carbon-light: var(--blue-700);
+  --carbon-text: var(--ink);
+  --carbon-secondary-text: var(--text-secondary);
+  --carbon-muted: var(--muted);
+  --carbon-border: var(--line);
+  --carbon-shadow: var(--card-shadow);
 
   --aurora-bg: var(--carbon-bg);
   --aurora-sidebar: var(--carbon-sidebar);
@@ -4642,7 +4702,7 @@ body,
   --aurora-purple-hover: var(--carbon-accent-hover);
   --aurora-secondary: var(--carbon-secondary);
   --aurora-lavender: var(--carbon-light);
-  --aurora-pink: #F4F4F5;
+  --aurora-pink: var(--blue-800);
   --aurora-text: var(--carbon-text);
   --aurora-secondary-text: var(--carbon-secondary-text);
   --aurora-muted: var(--carbon-muted);
@@ -4861,7 +4921,7 @@ body,
 .job-details-page .subtle-button:hover {
   border-color: var(--aurora-secondary);
   color: var(--aurora-text);
-  background: rgba(212, 212, 216, 0.1);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .dashboard-shell .status-success,
@@ -5018,10 +5078,7 @@ body,
 }
 
 .login-page::before {
-  background:
-    radial-gradient(circle at 18% 20%, rgba(16, 185, 129, 0.24), transparent 34%),
-    radial-gradient(circle at 82% 78%, rgba(20, 184, 166, 0.16), transparent 30%),
-    var(--aurora-bg);
+  background: var(--canvas);
 }
 
 .login-page .welcome-panel,
@@ -5034,16 +5091,31 @@ body,
 }
 
 .login-page .brand-symbol {
-  background: linear-gradient(135deg, #059669, #14B8A6);
+  background: linear-gradient(135deg, var(--brand-emerald), #14B8A6);
   box-shadow: 0 0 24px rgba(16, 185, 129, 0.32);
 }
 
-.login-page .brand-wordmark span,
 .login-page .welcome-kicker,
 .login-page .login-eyebrow,
 .login-page .login-panel-top a,
 .login-page .super-admin-link a {
   color: var(--aurora-lavender);
+}
+
+.login-page .brand-wordmark span {
+  color: var(--ink);
+}
+
+.login-page .login-eyebrow {
+  color: var(--blue-900);
+}
+
+.login-page .role-option {
+  box-shadow: 0 10px 24px rgba(30, 58, 138, 0.06);
+}
+
+.login-page .role-option:hover {
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.1);
 }
 /*
 .login-page .welcome-kicker,
@@ -5058,8 +5130,16 @@ body,
 .login-page .welcome-note,
 .login-page .role-option,
 .login-page .admin-note {
-  border-color: rgb(240, 239, 239);
-  background: rgba(0, 0, 0, 0.274);
+  border-color: var(--blue-border);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.login-page .role-option {
+  border-color: rgba(191, 219, 254, 0.82);
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 24px rgba(30, 58, 138, 0.06);
 }
 
 .login-page .welcome-kicker,
@@ -5080,20 +5160,29 @@ body,
   color: var(--aurora-secondary-text);
 }
 
+.login-page .welcome-kicker {
+  color: var(--blue-900);
+  background: var(--blue-50);
+}
+
+.login-page .login-panel-top {
+  color: #475569;
+}
+
 .login-page .welcome-dot {
-  background: var(--aurora-lavender);
-  box-shadow: 0 0 0 4px rgba(110, 231, 183, 0.16);
+  background: var(--blue-600);
+  box-shadow: 0 0 0 4px var(--blue-glow);
 }
 
 .login-page .welcome-note-icon,
 .login-page .role-option-icon {
-  color: var(--aurora-lavender);
-  background: rgba(110, 231, 183, 0.14);
+  color: var(--blue-700);
+  background: var(--blue-50);
 }
 
 .login-page .role-option {
   color: var(--aurora-text);
-  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  transition: border-color 250ms ease, background 250ms ease, box-shadow 250ms ease, transform 250ms ease;
 }
 
 .login-page .role-option:hover {
@@ -5107,10 +5196,10 @@ body,
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2), 0 0 24px rgba(16, 185, 129, 0.14);
 }
   */
-  .login-page .role-option-active {
-  border-color: var(--aurora-purple);
-  background: transparent;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2), 0 0 24px rgba(16, 185, 129, 0.14);;
+.login-page .role-option-active {
+  border-color: var(--blue-600);
+  background: rgba(219, 234, 254, 0.72);
+  box-shadow: 0 0 0 3px var(--blue-glow), inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 12px 30px rgba(37, 99, 235, 0.08);
 }
 
 .login-page .role-radio {
@@ -5118,11 +5207,11 @@ body,
 }
 
 .login-page .role-option-active .role-radio {
-  border-color: var(--aurora-lavender);
+  border-color: var(--blue-700);
 }
 
 .login-page .role-option-active .role-radio::after {
-  background: var(--aurora-lavender);
+  background: var(--blue-700);
 }
 
 .login-page .admin-note {
@@ -5130,21 +5219,31 @@ body,
 }
 
 .login-page .admin-note span {
-  color: var(--aurora-lavender);
+  color: var(--blue-700);
 }
 
-.login-page .login-submit,
-.login-page .google-button {
+.login-page .login-submit {
   border-color: var(--aurora-purple);
-  color: white;
-  background: linear-gradient(115deg, #059669, #10B981, #14B8A6);
-  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.22);
+  color: var(--text-inverse);
+  background: var(--blue-700);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.18);
 }
 
-.login-page .login-submit:hover,
+.login-page .google-button {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(30, 58, 138, 0.06);
+}
+
+.login-page .login-submit:hover {
+  background: var(--blue-800);
+  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.24);
+}
+
 .login-page .google-button:hover {
-  background: linear-gradient(115deg, #047857, #059669, #0F766E);
-  box-shadow: 0 10px 28px rgba(16, 185, 129, 0.32);
+  border-color: #93C5FD;
+  background: var(--blue-50);
 }
 
 .login-page .login-panel-top a:hover,
@@ -5159,8 +5258,8 @@ body,
 }
 
 .login-page .loading-message {
-  color: var(--aurora-lavender);
-  background: rgba(110, 231, 183, 0.12);
+  color: var(--blue-700);
+  background: var(--blue-50);
 }
 
 /* Stack authentication content vertically instead of using a split screen. */
@@ -5198,6 +5297,7 @@ body,
   max-width: 760px;
   margin-left: auto;
   margin-right: auto;
+  font-size: 64px;
 }
 
 .login-page .welcome-content > p {
@@ -5248,8 +5348,8 @@ body,
 
 .login-page .role-option {
   min-height: 118px;
-  padding: 18px;
-  border-radius: 16px;
+  padding: 20px;
+  border-radius: 20px;
 }
 
 .login-page .role-option-icon {
@@ -5286,7 +5386,7 @@ body,
   }
 
   .login-page .welcome-content h1 {
-    font-size: clamp(36px, 12vw, 54px);
+    font-size: clamp(40px, 10vw, 48px);
   }
 
   .login-page .welcome-footer {
@@ -5455,7 +5555,7 @@ body,
   }
 
   .login-page .welcome-content h1 {
-    font-size: clamp(36px, 11vw, 54px);
+    font-size: clamp(40px, 10vw, 48px);
   }
 }
 
@@ -5466,11 +5566,11 @@ body,
   align-items: stretch;
   min-height: 100svh;
   overflow: hidden;
-  background: #000000 !important;
+  background: var(--canvas) !important;
 }
 
 .login-page::before {
-  background: #000000 !important;
+  background: var(--canvas) !important;
 }
 
 .login-page .login-header {
@@ -5797,8 +5897,8 @@ body,
 
 .dashboard-shell .brand-symbol {
   border-color: var(--aurora-border);
-  color: var(--aurora-bg);
-  background: linear-gradient(135deg, var(--aurora-purple), var(--aurora-lavender));
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--brand-emerald), #14B8A6);
   box-shadow: none;
 }
 
@@ -5913,21 +6013,21 @@ body,
 }
 
 .dashboard-shell .data-card tbody tr:hover td {
-  background: rgba(212, 212, 216, 0.06);
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .dashboard-shell .green-button {
   border-color: var(--aurora-purple);
-  color: var(--aurora-bg);
+  color: var(--text-inverse);
   background: var(--aurora-purple);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.16);
 }
 
 .dashboard-shell .green-button:hover:not(:disabled) {
   border-color: var(--aurora-purple-hover);
-  color: var(--aurora-bg);
+  color: var(--text-inverse);
   background: var(--aurora-purple-hover);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.2);
 }
 
 .dashboard-shell .green-button:disabled {
@@ -6000,7 +6100,7 @@ body,
   border-color: var(--aurora-border);
   color: var(--aurora-text);
   background: var(--aurora-input);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 .dashboard-shell .application-status-select {
@@ -6035,7 +6135,7 @@ body,
 .dashboard-shell textarea:focus,
 .dashboard-shell .module-search:focus {
   border-color: var(--aurora-secondary);
-  box-shadow: 0 0 0 3px rgba(212, 212, 216, 0.14);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .dashboard-shell .integration-notice {
@@ -6121,7 +6221,7 @@ body,
 
 .job-details-page .green-button {
   border-color: var(--aurora-purple);
-  color: var(--aurora-bg);
+  color: var(--text-inverse);
   background: var(--aurora-purple);
   box-shadow: none;
 }
@@ -6157,14 +6257,14 @@ body,
 .job-details-page .application-form textarea:focus,
 .job-details-page .application-form input[type='file']:focus {
   border-color: var(--aurora-secondary);
-  box-shadow: 0 0 0 3px rgba(212, 212, 216, 0.14);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .dashboard-shell .meeting-link:link,
 .dashboard-shell .meeting-link:visited {
-  color: #8ecbff;
+  color: var(--blue-700);
 }
 
 .dashboard-shell .meeting-link:hover {
-  color: #b8e0ff;
+  color: var(--blue-800);
 }

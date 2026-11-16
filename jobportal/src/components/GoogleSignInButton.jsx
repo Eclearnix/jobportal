@@ -46,7 +46,7 @@ export default function GoogleSignInButton({ role, onCredential, disabled = fals
       container.replaceChildren()
       googleIdentity.accounts.id.renderButton(container, {
         type: 'standard',
-        theme: 'filled_black',
+        theme: 'outline',
         size: 'large',
         shape: 'rectangular',
         text: 'continue_with',

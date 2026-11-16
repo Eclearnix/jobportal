@@ -426,7 +426,7 @@ router.get('/dashboard/candidate', requireUser, requireRoles('candidate'), async
     User.findById(req.user._id).select('name title location skills education experience resumeKey phone preferredLocations openToOpportunities profileViews'),
     Application.find({ candidate: req.user._id }).sort({ createdAt: -1 }).limit(5).populate({ path: 'job', select: 'title location employmentType' }).populate({ path: 'company', select: 'name' }).lean(),
     Job.find({ status: 'published', ...(req.user.skills?.length ? { skills: { $in: req.user.skills } } : {}) }).sort({ publishedAt: -1 }).limit(4).populate('company', 'name location').lean(),
-    Notification.countDocuments({ user: req.user._id, readAt: null }),
+    Notification.countDocuments({ user: req.user._id, readAt: null, archivedAt: null }),
   ])
   const profileFields = [profile?.phone, profile?.location, profile?.skills?.length, profile?.education?.length, profile?.experience?.length, profile?.resumeKey]
   const profileStrength = Math.round(profileFields.filter(Boolean).length / profileFields.length * 100)
@@ -476,7 +476,10 @@ router.get('/candidate/resume/file', requireUser, requireRoles('candidate'), asy
 
 router.get('/candidate/applications', requireUser, requireRoles('candidate'), async (req, res) => {
   const { page, limit, skip } = toPage(req.query)
-  const query = { candidate: req.user._id }
+  const query = {
+    candidate: req.user._id,
+    candidateArchivedAt: req.query.archived === 'true' ? { $ne: null } : null,
+  }
   const [items, total] = await Promise.all([
     Application.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('job', 'title location employmentType').populate('company', 'name').lean(),
     Application.countDocuments(query),
@@ -526,6 +529,18 @@ router.patch('/candidate/applications/:applicationId/withdraw', requireUser, req
   res.json({ application })
 })
 
+router.patch('/candidate/applications/:applicationId/archive', requireUser, requireRoles('candidate'), async (req, res) => {
+  const id = validate(objectId, req.params.applicationId)
+  const { archived } = validate(z.object({ archived: z.boolean() }).strict(), req.body)
+  const application = await Application.findOneAndUpdate(
+    { _id: id, candidate: req.user._id },
+    { $set: { candidateArchivedAt: archived ? new Date() : null } },
+    { new: true, runValidators: true },
+  )
+  if (!application) return res.status(404).json({ error: 'Application not found.' })
+  res.json({ application })
+})
+
 router.post('/candidate/saved-jobs/:jobId', requireUser, requireRoles('candidate'), async (req, res) => {
   const jobId = validate(objectId, req.params.jobId)
   const job = await Job.findOne({ _id: jobId, status: 'published' }).select('_id')
@@ -552,7 +567,8 @@ router.get('/candidate/saved-jobs', requireUser, requireRoles('candidate'), asyn
 })
 
 router.get('/candidate/notifications', requireUser, requireRoles('candidate'), async (req, res) => {
-  const items = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50).lean()
+  const archivedAt = req.query.archived === 'true' ? { $ne: null } : null
+  const items = await Notification.find({ user: req.user._id, archivedAt }).sort({ createdAt: -1 }).limit(50).lean()
   res.json({ items })
 })
 
@@ -561,6 +577,30 @@ router.patch('/candidate/notifications/:notificationId/read', requireUser, requi
   const notification = await Notification.findOneAndUpdate({ _id: id, user: req.user._id }, { readAt: new Date() }, { new: true })
   if (!notification) return res.status(404).json({ error: 'Notification not found.' })
   res.json({ notification })
+})
+
+router.patch('/candidate/notifications/:notificationId/archive', requireUser, requireRoles('candidate'), async (req, res) => {
+  const id = validate(objectId, req.params.notificationId)
+  const { archived } = validate(z.object({ archived: z.boolean() }).strict(), req.body)
+  const notification = await Notification.findOneAndUpdate(
+    { _id: id, user: req.user._id },
+    { $set: { archivedAt: archived ? new Date() : null } },
+    { new: true, runValidators: true },
+  )
+  if (!notification) return res.status(404).json({ error: 'Notification not found.' })
+  res.json({ notification })
+})
+
+router.delete('/candidate/notifications/:notificationId', requireUser, requireRoles('candidate'), async (req, res) => {
+  const id = validate(objectId, req.params.notificationId)
+  const result = await Notification.deleteOne({ _id: id, user: req.user._id })
+  if (!result.deletedCount) return res.status(404).json({ error: 'Notification not found.' })
+  res.status(204).end()
+})
+
+router.delete('/candidate/notifications', requireUser, requireRoles('candidate'), async (req, res) => {
+  await Notification.deleteMany({ user: req.user._id })
+  res.status(204).end()
 })
 
 router.get('/candidate/interviews', requireUser, requireRoles('candidate'), async (req, res) => {

@@ -6570,3 +6570,182 @@ body,
 .candidate-invite-form .green-button {
   align-self: flex-end;
 }
+
+.nav-icon {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.notification-unread-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14);
+}
+
+.candidate-notifications-toolbar,
+.candidate-applications-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin: 0 0 20px;
+  padding: 10px 16px;
+}
+
+.candidate-notifications-toolbar > button,
+.candidate-applications-toolbar > button {
+  min-height: 48px;
+  margin: 0 4px 4px 0;
+  padding: 13px 24px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.candidate-notification-table .table-scroll {
+  overflow-x: hidden;
+}
+
+.candidate-notification-table table {
+  table-layout: fixed;
+  white-space: normal;
+}
+
+.candidate-notification-table th:nth-child(1),
+.candidate-notification-table td:nth-child(1) {
+  width: 18%;
+}
+
+.candidate-notification-table th:nth-child(2),
+.candidate-notification-table td:nth-child(2) {
+  width: 42%;
+}
+
+.candidate-notification-table th:nth-child(3),
+.candidate-notification-table td:nth-child(3) {
+  width: 15%;
+}
+
+.candidate-notification-table th:nth-child(4),
+.candidate-notification-table td:nth-child(4) {
+  width: 25%;
+}
+
+.candidate-notification-table td {
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.candidate-notification-table td.table-actions {
+  display: table-cell;
+}
+
+.candidate-notification-table .application-actions {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.candidate-notification-table .application-actions button {
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .candidate-notifications-toolbar,
+  .candidate-applications-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 8px;
+  }
+
+  .candidate-notifications-toolbar > button,
+  .candidate-applications-toolbar > button {
+    margin: 0;
+    justify-content: center;
+  }
+
+  .candidate-notification-table th,
+  .candidate-notification-table td {
+    padding: 9px 5px;
+  }
+
+  .candidate-notification-table th:first-child,
+  .candidate-notification-table td:first-child {
+    padding-left: 8px;
+  }
+
+  .candidate-notification-table th {
+    font-size: 10px;
+  }
+
+  .candidate-notification-table td {
+    font-size: 12px;
+  }
+
+  .candidate-notification-table .application-actions button {
+    padding: 6px 5px;
+    font-size: 11px;
+  }
+}
+
+.candidate-profile-large-text .module-heading p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.candidate-profile-large-text .module-form label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.candidate-profile-large-text .module-form label small,
+.candidate-profile-large-text .checkbox-field small {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.candidate-profile-large-text .module-form input:not([type='checkbox']),
+.candidate-profile-large-text .module-form select,
+.candidate-profile-large-text .module-form textarea {
+  min-height: 46px;
+  padding: 11px 13px;
+  font-size: 15px;
+}
+
+.candidate-profile-large-text .module-form .checkbox-field input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.candidate-profile-large-text .module-form .green-button {
+  min-height: 46px;
+  padding: 11px 18px;
+  font-size: 14px;
+}
+
+.candidate-profile-large-text .resume-manager h3 {
+  font-size: 18px;
+}
+
+.candidate-profile-large-text .resume-manager p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.candidate-profile-large-text .resume-manager .subtle-button {
+  min-height: 42px;
+  padding: 10px 14px;
+  font-size: 13px;
+}

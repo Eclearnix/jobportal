@@ -74,13 +74,13 @@ function MetricCards({ items }) {
   ))}</div>
 }
 
-function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here yet.' }) {
+function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here yet.', className = '' }) {
   const filteredRows = rows.filter((row) => row.cells.some((cell) => {
     const text = typeof cell === 'string' || typeof cell === 'number' ? String(cell) : String(cell?.props?.children || '')
     return text.toLowerCase().includes(search.toLowerCase())
   }))
   return (
-    <div className="data-card">
+    <div className={`data-card ${className}`.trim()}>
       <div className="table-scroll"><table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}{actions && <th>Actions</th>}</tr></thead>
         <tbody>
           {filteredRows.length ? filteredRows.map((row) => (
@@ -374,7 +374,7 @@ function JobPostForm({ onCreated }) {
   )
 }
 
-function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved }) {
+function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved, showHeading = true, largeText = false }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [resumeBusy, setResumeBusy] = useState(false)
@@ -433,8 +433,8 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
   }
 
   return (
-    <section className="module-section">
-      <div className="module-heading"><div><h2>Your profile</h2><p>Keep your experience current so opportunities can find you.</p></div></div>
+    <section className={`module-section candidate-profile ${largeText ? 'candidate-profile-large-text' : ''}`}>
+      <div className="module-heading"><div>{showHeading && <h2>Your profile</h2>}<p>Keep your experience current so opportunities can find you.</p></div></div>
       <form className="module-form" onSubmit={saveProfile}>
         <label>Full name<input name="name" defaultValue={profile?.name} required maxLength={120} /></label>
         <label>Professional headline<input name="title" defaultValue={profile?.title} maxLength={120} /></label>
@@ -761,6 +761,9 @@ function DashboardWorkspace({ role }) {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [canInviteSelectedCandidate, setCanInviteSelectedCandidate] = useState(false)
   const [showArchivedApplications, setShowArchivedApplications] = useState(false)
+  const [showRemovedApplications, setShowRemovedApplications] = useState(false)
+  const [showArchivedNotifications, setShowArchivedNotifications] = useState(false)
+  const [notificationActionsBusy, setNotificationActionsBusy] = useState(false)
   const loadSequence = useRef(0)
   const [today] = useState(() => new Date())
   const navItems = navigation[role]
@@ -792,12 +795,12 @@ function DashboardWorkspace({ role }) {
         if (role === 'candidate') {
           const endpoint = {
             'Find Jobs': '/jobs',
-            'My Applications': '/candidate/applications',
+            'My Applications': `/candidate/applications${showRemovedApplications ? '?archived=true' : ''}`,
             'Saved Jobs': '/candidate/saved-jobs',
             'My Profile': '/dashboard/candidate',
             Resume: '/dashboard/candidate',
             Interviews: '/candidate/interviews',
-            Notifications: '/candidate/notifications',
+            Notifications: `/candidate/notifications?archived=${showArchivedNotifications}`,
             Settings: '/dashboard/candidate',
           }[activePage]
           nextView = await api(endpoint)
@@ -844,7 +847,7 @@ function DashboardWorkspace({ role }) {
     } finally {
       if (requestId === loadSequence.current && !quiet) setLoading(false)
     }
-  }, [activePage, navigate, role, showArchivedApplications])
+  }, [activePage, navigate, role, showArchivedApplications, showArchivedNotifications, showRemovedApplications])
 
   const refreshAfterProfileSave = useCallback(async () => {
     await reload({ quiet: true })
@@ -855,6 +858,32 @@ function DashboardWorkspace({ role }) {
     void reload()
     return () => { loadSequence.current += 1 }
   }, [reload])
+
+  useEffect(() => {
+    if (role !== 'candidate') return undefined
+
+    let active = true
+    const refreshUnreadNotifications = async () => {
+      try {
+        const { summary } = await api('/dashboard/candidate')
+        if (active) {
+          setPayload((current) => current
+            ? { ...current, summary: { ...current.summary, unreadNotifications: summary.unreadNotifications } }
+            : current)
+        }
+      } catch (pollError) {
+        if (active) setActionError(pollError.message)
+      }
+    }
+
+    const intervalId = window.setInterval(refreshUnreadNotifications, 60000)
+    window.addEventListener('focus', refreshUnreadNotifications)
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refreshUnreadNotifications)
+    }
+  }, [role])
 
   const goTo = (label) => {
     navigate(label === 'Overview' ? paths[role] : `${paths[role]}/${slug(label)}`)
@@ -872,6 +901,15 @@ function DashboardWorkspace({ role }) {
       await reload()
     } catch (operationError) {
       setActionError(operationError.message)
+    }
+  }
+
+  const runNotificationMutation = async (operation) => {
+    setNotificationActionsBusy(true)
+    try {
+      await mutate(operation)
+    } finally {
+      setNotificationActionsBusy(false)
     }
   }
 
@@ -951,8 +989,16 @@ function DashboardWorkspace({ role }) {
       id: item._id, cells: [item.job?.title, item.company?.name, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)], resource: item,
     }))} actions={(row) => <div className="application-actions">
       {row.resource.job?._id && <button type="button" className="org-action-button" onClick={() => navigate(`/jobs/${row.resource.job._id}`)}>View job</button>}
-      {['submitted', 'under_review', 'shortlisted'].includes(row.resource.status) && <button type="button" className="org-action-button org-remove-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/withdraw`, { method: 'PATCH' }))}>Withdraw</button>}
-    </div>} empty="You have not applied to any jobs yet." />
+      {showRemovedApplications
+        ? <button type="button" className="org-action-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: false } }))}>Restore</button>
+        : <>
+          {['submitted', 'under_review', 'shortlisted'].includes(row.resource.status) && <button type="button" className="org-action-button org-remove-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/withdraw`, { method: 'PATCH' }))}>Withdraw</button>}
+          <button type="button" className="org-action-button org-remove-button" onClick={async () => {
+            if (!window.confirm('Remove this application from your list? It will remain visible to the organization.')) return
+            await mutate(() => api(`/candidate/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: true } }))
+          }}>Delete</button>
+        </>}
+    </div>} empty={showRemovedApplications ? 'No removed applications.' : 'You have not applied to any jobs yet.'} />
   } else if (isCandidate && activePage === 'Saved Jobs') {
     table = <DataTable columns={['Position', 'Organization', 'Location', '']} rows={(viewData?.items || []).map((item) => ({
       id: item._id, cells: [item.job?.title, item.job?.company?.name, item.job?.location, <button type="button" className="text-button" key="open" onClick={() => navigate(`/jobs/${item.job?._id}`)}>View job</button>], resource: item,
@@ -971,9 +1017,17 @@ function DashboardWorkspace({ role }) {
       const isJobInvitation = isCandidate && row.resource.type === 'job_invitation' && row.resource.relatedId
       return <div className="application-actions">
         {isJobInvitation && <button type="button" className="org-action-button" onClick={() => navigate(`/jobs/${row.resource.relatedId}`)}>View job</button>}
-        {row.resource.readAt ? !isJobInvitation && 'Read' : <button type="button" className="org-action-button" onClick={() => mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>}
+        {!row.resource.readAt && <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => isCandidate
+          ? runNotificationMutation(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))
+          : mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>}
+        {!isCandidate && row.resource.readAt && !isJobInvitation && 'Read'}
+        {isCandidate && <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => runNotificationMutation(() => api(`/candidate/notifications/${row.id}/archive`, { method: 'PATCH', body: { archived: !showArchivedNotifications } }))}>{showArchivedNotifications ? 'Restore' : 'Archive'}</button>}
+        {isCandidate && <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={async () => {
+          if (!window.confirm('Permanently delete this notification?')) return
+          await runNotificationMutation(() => api(`/candidate/notifications/${row.id}`, { method: 'DELETE' }))
+        }}>Delete</button>}
       </div>
-    }} empty="You’re all caught up." />
+    }} empty={isCandidate && showArchivedNotifications ? 'No archived notifications.' : 'You’re all caught up.'} className={isCandidate ? 'candidate-notification-table' : ''} />
   } else if (isRecruiter && ['Manage Jobs', 'Applications', 'Candidates'].includes(activePage)) {
     const rows = activePage === 'Manage Jobs'
       ? (viewData?.items || []).map((job) => ({
@@ -1079,7 +1133,14 @@ function DashboardWorkspace({ role }) {
         <div className="workspace-switcher"><span className={`workspace-avatar avatar-${role}`}>{(role === 'recruiter' ? payload?.company?.name : user.name)?.charAt(0) || 'E'}</span><span><strong>{role === 'recruiter' ? payload?.company?.name || 'Organization' : role === 'super_admin' ? 'Super Admin' : user.name}</strong><small>{role === 'super_admin' ? 'Platform control' : role === 'recruiter' ? payload?.company?.status === 'verified' ? 'Verified organization' : 'Pending organization' : 'Candidate workspace'}</small></span></div>
         <nav className="dashboard-nav" aria-label={`${role} navigation`}>
           <span className="nav-section-label">WORKSPACE</span>
-          {navItems.map(([label, Icon], index) => <button key={label} type="button" className={`dashboard-nav-item ${activePage === label ? 'dashboard-nav-active' : ''}`} style={{ '--sidebar-item-index': index }} onClick={() => goTo(label)}><span className="nav-icon"><Icon size={16} /></span>{label}{isAdmin && label === 'Verification Requests' && payload?.summary?.pendingVerifications > 0 && <span className="nav-count">{payload.summary.pendingVerifications}</span>}</button>)}
+          {navItems.map(([label, Icon], index) => {
+            const unreadNotifications = isCandidate && label === 'Notifications' ? payload?.summary?.unreadNotifications || 0 : 0
+            return <button key={label} type="button" className={`dashboard-nav-item ${activePage === label ? 'dashboard-nav-active' : ''}`} style={{ '--sidebar-item-index': index }} onClick={() => goTo(label)} aria-label={unreadNotifications ? `Notifications, ${unreadNotifications} unread` : label}>
+              <span className="nav-icon"><Icon size={16} />{unreadNotifications > 0 && <span className="notification-unread-dot" aria-hidden="true" />}</span>
+              {label}
+              {isAdmin && label === 'Verification Requests' && payload?.summary?.pendingVerifications > 0 && <span className="nav-count">{payload.summary.pendingVerifications}</span>}
+            </button>
+          })}
         </nav>
         <button type="button" className="logout-button" onClick={async () => { await signOut(); navigate('/login', { replace: true }) }}><LogOut size={15} /> Sign out</button>
       </aside>
@@ -1120,7 +1181,7 @@ function DashboardWorkspace({ role }) {
               ? 'Job submitted for review. Candidates will see it after it is approved and published.'
               : 'Draft saved. Publish it when ready; candidates only see published jobs.')
           }} />}
-          {!loading && !error && isCandidate && activePage === 'My Profile' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
+          {!loading && !error && isCandidate && activePage === 'My Profile' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} showHeading={false} largeText />}
           {!loading && !error && isCandidate && activePage === 'Resume' && <CandidateResume profile={viewData?.profile} onSaved={reload} />}
           {!loading && !error && isAdmin && activePage === 'Settings' && <SuperAdminSettings settings={viewData?.items || []} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Settings' && <OrganizationSettings settings={viewData} reload={reload} />}
@@ -1129,6 +1190,16 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateProfile profile={viewData?.profile} onSaved={reload} onProfileSaveStart={() => setProfileSaveMessage('')} onProfileSaved={refreshAfterProfileSave} />}
           {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} timeZone={organizationTimeZone} />}
           {!loading && !error && table && <section className="module-section">
+            {isCandidate && activePage === 'My Applications' && <div className="candidate-applications-toolbar">
+              <button type="button" className="subtle-button" onClick={() => setShowRemovedApplications((current) => !current)}>{showRemovedApplications ? 'View active applications' : 'View deleted applications'}</button>
+            </div>}
+            {isCandidate && activePage === 'Notifications' && <div className="candidate-notifications-toolbar">
+              <button type="button" className="subtle-button" disabled={notificationActionsBusy} onClick={() => setShowArchivedNotifications((current) => !current)}>{showArchivedNotifications ? 'View active notifications' : 'View archived notifications'}</button>
+              <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={async () => {
+                if (!window.confirm('Permanently delete all of your notifications, including archived ones? This cannot be undone.')) return
+                await runNotificationMutation(() => api('/candidate/notifications', { method: 'DELETE' }))
+              }}>Clear notifications</button>
+            </div>}
             {(canSearch || isRecruiter && activePage === 'Applications') && <div className="module-heading">
               <div>
                 {(activePage !== 'Applications' || showArchivedApplications) && <h2>{activePage === 'Applications' ? 'Archived applications' : activePage}</h2>}

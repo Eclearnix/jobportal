@@ -86,6 +86,7 @@ const applicationSchema = new Schema({
   coverLetter: { type: String, trim: true, maxlength: 5000, default: '' },
   status: { type: String, enum: ['submitted', 'under_review', 'shortlisted', 'interview_scheduled', 'selected', 'rejected', 'withdrawn'], default: 'submitted', index: true },
   withdrawnAt: { type: Date, default: null },
+  candidateArchivedAt: { type: Date, default: null },
   archivedAt: { type: Date, default: null },
 }, { timestamps: true, strict: 'throw' })
 
@@ -104,6 +105,7 @@ const notificationSchema = new Schema({
   title: { type: String, required: true, maxlength: 180 },
   message: { type: String, required: true, maxlength: 1000 },
   readAt: { type: Date, default: null },
+  archivedAt: { type: Date, default: null },
   relatedId: { type: Schema.Types.ObjectId, default: null },
 }, { timestamps: true })
 

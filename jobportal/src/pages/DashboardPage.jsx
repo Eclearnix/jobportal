@@ -1,4 +1,5 @@
-import { cloneElement, useCallback, useEffect, useMemo, useState } from 'react'
+import { Component, cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, ClipboardList, FileText,
   LayoutDashboard, LogOut, Search, Settings, Shield, Users, UserRound, X,
@@ -95,7 +96,132 @@ function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here 
   )
 }
 
-function CandidatePreview({ candidate, onClose }) {
+function ScheduleInterviewForm({ applicationId, onSaved, onScheduled }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [minimumDateTime] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16))
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const form = new FormData(event.currentTarget)
+    try {
+      const result = await api(`/recruiter/applications/${applicationId}/interviews`, {
+        method: 'POST',
+        body: {
+          scheduledAt: new Date(String(form.get('scheduledAt'))).toISOString(),
+          durationMinutes: Number(form.get('durationMinutes')),
+          meetingUrl: form.get('meetingUrl'),
+          notes: form.get('notes'),
+        },
+      })
+      setOpen(false)
+      onScheduled(result.emailSent
+        ? 'Interview scheduled and email sent to the candidate.'
+        : `Interview scheduled and in-app notification created, but email was not sent. ${result.emailError}`)
+      await onSaved()
+    } catch (scheduleError) {
+      setError(scheduleError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className="org-action-button" onClick={() => { setOpen(!open); setError('') }}>
+        {open ? 'Cancel' : 'Schedule interview'}
+      </button>
+      {open && createPortal(
+        <div className="interview-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !busy) setOpen(false)
+        }}>
+          <section className="interview-modal" role="dialog" aria-modal="true" aria-labelledby={`interview-title-${applicationId}`}>
+            <h2 id={`interview-title-${applicationId}`}>Schedule interview</h2>
+            <p>Choose a time and share the meeting details with the candidate.</p>
+            <form className="interview-scheduler-form" onSubmit={submit}>
+              <label>Date and time<input name="scheduledAt" type="datetime-local" required min={minimumDateTime} /></label>
+              <label>Duration<select name="durationMinutes" defaultValue="30"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
+              <label>Meeting link<input name="meetingUrl" type="url" maxLength={500} placeholder="https://…" /></label>
+              <label>Notes<textarea name="notes" rows="3" maxLength="2000" /></label>
+              {error && <p className="auth-error" role="alert">{error}</p>}
+              <div className="interview-modal-actions">
+                <button type="button" className="subtle-button" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
+                <button type="submit" className="green-button" disabled={busy}>{busy ? 'Scheduling…' : 'Confirm interview'}</button>
+              </div>
+            </form>
+          </section>
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function CandidateInvitePanel({ candidateId }) {
+  const [jobs, setJobs] = useState([])
+  const [jobId, setJobId] = useState('')
+  const [loadingJobs, setLoadingJobs] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    api('/recruiter/jobs?limit=100')
+      .then(({ items }) => {
+        if (!active) return
+        const publishedJobs = items.filter((job) => job.status === 'published')
+        setJobs(publishedJobs)
+        setJobId(publishedJobs[0]?._id || '')
+      })
+      .catch((loadError) => { if (active) setLoadError(loadError.message) })
+      .finally(() => { if (active) setLoadingJobs(false) })
+    return () => { active = false }
+  }, [])
+
+  async function sendInvitation(event) {
+    event.preventDefault()
+    setError('')
+    setMessage('')
+    setBusy(true)
+    try {
+      await api(`/recruiter/candidates/${candidateId}/invitations`, { method: 'POST', body: { jobId } })
+      setMessage('Invite sent. The candidate can view it in website notifications.')
+    } catch (sendError) {
+      setError(sendError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="candidate-invite-panel" aria-label="Invite candidate to apply">
+      <h3>Invite to apply</h3>
+      {loadingJobs && <p role="status">Loading published jobs…</p>}
+      {!loadingJobs && loadError && <p className="auth-error" role="alert">{loadError}</p>}
+      {!loadingJobs && !loadError && !jobs.length && <p>No published jobs are available to invite this candidate to.</p>}
+      {!loadingJobs && !loadError && jobs.length > 0 && (
+        <form className="candidate-invite-form" onSubmit={sendInvitation}>
+          <label htmlFor={`candidate-invite-job-${candidateId}`}>Published job</label>
+          <select id={`candidate-invite-job-${candidateId}`} value={jobId} onChange={(event) => { setJobId(event.target.value); setError(''); setMessage('') }} required>
+            {jobs.map((job) => <option key={job._id} value={job._id}>{job.title}</option>)}
+          </select>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          {message && <p className="integration-notice" role="status">{message}</p>}
+          <button type="submit" className="green-button" disabled={busy || !jobId || Boolean(message)}>{busy ? 'Sending invite…' : message ? 'Invite sent' : 'Send invite'}</button>
+        </form>
+      )}
+    </section>
+  )
+}
+
+function CandidatePreview({ candidate, onClose, canInvite = false }) {
+  const [showInvite, setShowInvite] = useState(false)
+
   return (
     <div className="candidate-preview-backdrop" role="presentation" onClick={onClose}>
       <section className="candidate-preview" role="dialog" aria-modal="true" aria-labelledby="candidate-preview-title" onClick={(event) => event.stopPropagation()}>
@@ -113,6 +239,14 @@ function CandidatePreview({ candidate, onClose }) {
           <h3>Education</h3>
           {candidate.education.map((item, index) => <p key={`${item.school}-${index}`}>{item.degree} · {item.school}</p>)}
         </>}
+        {canInvite && (
+          <>
+            <div className="candidate-preview-actions">
+              <button type="button" className="green-button" aria-expanded={showInvite} onClick={() => setShowInvite((current) => !current)}>{showInvite ? 'Close invite form' : 'Invite'}</button>
+            </div>
+            {showInvite && <CandidateInvitePanel candidateId={candidate._id} />}
+          </>
+        )}
       </section>
     </div>
   )
@@ -625,7 +759,9 @@ function DashboardWorkspace({ role }) {
   const [profileSaveMessage, setProfileSaveMessage] = useState('')
   const [jobPostMessage, setJobPostMessage] = useState('')
   const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const [canInviteSelectedCandidate, setCanInviteSelectedCandidate] = useState(false)
   const [showArchivedApplications, setShowArchivedApplications] = useState(false)
+  const loadSequence = useRef(0)
   const [today] = useState(() => new Date())
   const navItems = navigation[role]
   const activePage = navItems.find(([label]) => slug(label) === section)?.[0] || 'Overview'
@@ -634,15 +770,23 @@ function DashboardWorkspace({ role }) {
     : activePage
 
   const reload = useCallback(async ({ quiet = false } = {}) => {
-    if (!quiet) setLoading(true)
+    const requestId = ++loadSequence.current
+    if (quiet) {
+      setLoading(false)
+    } else {
+      setLoading(true)
+      setViewData(null)
+    }
     setError('')
     try {
       const overviewPath = role === 'candidate' ? '/dashboard/candidate' : role === 'recruiter' ? '/dashboard/recruiter' : '/dashboard/admin'
       const overview = await api(overviewPath)
+      if (requestId !== loadSequence.current) return
       setPayload(overview)
       let nextView = overview
       if (role === 'super_admin' && activePage === 'Overview') {
         nextView = await api('/admin/organizations?status=pending&limit=5')
+        if (requestId !== loadSequence.current) return
       }
       if (activePage !== 'Overview') {
         if (role === 'candidate') {
@@ -657,6 +801,7 @@ function DashboardWorkspace({ role }) {
             Settings: '/dashboard/candidate',
           }[activePage]
           nextView = await api(endpoint)
+          if (requestId !== loadSequence.current) return
         } else if (role === 'recruiter') {
           const endpoint = {
             'Manage Jobs': '/recruiter/jobs',
@@ -669,7 +814,10 @@ function DashboardWorkspace({ role }) {
             Notifications: '/recruiter/notifications',
             Settings: '/recruiter/settings',
           }[activePage]
-          if (activePage !== 'Post a Job') nextView = await api(endpoint)
+          if (activePage !== 'Post a Job') {
+            nextView = await api(endpoint)
+            if (requestId !== loadSequence.current) return
+          }
         } else {
           const endpoint = {
             'User Management': '/admin/users',
@@ -685,14 +833,16 @@ function DashboardWorkspace({ role }) {
             Settings: '/admin/settings',
           }[activePage]
           nextView = await api(endpoint)
+          if (requestId !== loadSequence.current) return
         }
       }
       setViewData(nextView)
     } catch (loadError) {
+      if (requestId !== loadSequence.current) return
       setError(loadError.message)
       if (role === 'recruiter' && /organization registration/i.test(loadError.message)) navigate('/onboarding/recruiter', { replace: true })
     } finally {
-      if (!quiet) setLoading(false)
+      if (requestId === loadSequence.current && !quiet) setLoading(false)
     }
   }, [activePage, navigate, role, showArchivedApplications])
 
@@ -701,7 +851,10 @@ function DashboardWorkspace({ role }) {
     setProfileSaveMessage('Your profile has been updated successfully.')
   }, [reload])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    void reload()
+    return () => { loadSequence.current += 1 }
+  }, [reload])
 
   const goTo = (label) => {
     navigate(label === 'Overview' ? paths[role] : `${paths[role]}/${slug(label)}`)
@@ -722,11 +875,12 @@ function DashboardWorkspace({ role }) {
     }
   }
 
-  const inspectCandidate = async (candidateId) => {
+  const inspectCandidate = async (candidateId, canInvite = false) => {
     setActionError('')
     try {
       const { candidate } = await api(`/recruiter/candidates/${candidateId}`)
       setSelectedCandidate(candidate)
+      setCanInviteSelectedCandidate(canInvite)
     } catch (requestError) {
       setActionError(requestError.message)
     }
@@ -813,7 +967,13 @@ function DashboardWorkspace({ role }) {
     const notificationBase = isCandidate ? '/candidate' : isRecruiter ? '/recruiter' : '/admin'
     table = <DataTable columns={['Notification', 'Message', 'Date']} rows={(viewData?.items || []).map((item) => ({
       id: item._id, cells: [item.title, item.message, dateLabel(item.createdAt, organizationTimeZone)], resource: item,
-    }))} actions={(row) => row.resource.readAt ? 'Read' : <button type="button" className="org-action-button" onClick={() => mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>} empty="You’re all caught up." />
+    }))} actions={(row) => {
+      const isJobInvitation = isCandidate && row.resource.type === 'job_invitation' && row.resource.relatedId
+      return <div className="application-actions">
+        {isJobInvitation && <button type="button" className="org-action-button" onClick={() => navigate(`/jobs/${row.resource.relatedId}`)}>View job</button>}
+        {row.resource.readAt ? !isJobInvitation && 'Read' : <button type="button" className="org-action-button" onClick={() => mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>}
+      </div>
+    }} empty="You’re all caught up." />
   } else if (isRecruiter && ['Manage Jobs', 'Applications', 'Candidates'].includes(activePage)) {
     const rows = activePage === 'Manage Jobs'
       ? (viewData?.items || []).map((job) => ({
@@ -854,6 +1014,7 @@ function DashboardWorkspace({ role }) {
             {!showArchivedApplications && <select className="application-status-select" aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select>}
             <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button>
             <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button>
+            {!showArchivedApplications && <ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} />}
             <button type="button" className="org-action-button" aria-label={`${showArchivedApplications ? 'Restore' : 'Archive'} application for ${row.resource.candidate?.name || 'candidate'}`} onClick={() => mutate(() => api(`/recruiter/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: !showArchivedApplications } }))}>{showArchivedApplications ? 'Restore' : 'Archive'}</button>
           </div>}
       empty={showArchivedApplications ? 'No archived applications.' : 'No records to show yet.'}
@@ -863,7 +1024,7 @@ function DashboardWorkspace({ role }) {
       id: candidate._id,
       cells: [candidate.name, candidate.title || '—', candidate.location || '—', candidate.skills?.join(', ') || '—'],
       resource: candidate,
-    }))} actions={(row) => <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.id)}>View profile</button>} empty="No candidates are currently open to opportunities." />
+    }))} actions={(row) => <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.id, true)}>View profile</button>} empty="No candidates are currently open to opportunities." />
   } else if (isRecruiter && activePage === 'Interviews') {
     table = <DataTable columns={['Candidate', 'Job', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,
@@ -937,7 +1098,7 @@ function DashboardWorkspace({ role }) {
           {error && <ErrorNotice message={error} onRetry={reload} />}
           {profileSaveMessage && <p className="profile-save-success" role="status">{profileSaveMessage}</p>}
           {jobPostMessage && <p className="integration-notice" role="status">{jobPostMessage}</p>}
-              {selectedCandidate && <CandidatePreview candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />}
+              {selectedCandidate && <CandidatePreview candidate={selectedCandidate} canInvite={canInviteSelectedCandidate} onClose={() => { setSelectedCandidate(null); setCanInviteSelectedCandidate(false) }} />}
 
           {loading && payload && <Loading />}
           {!loading && !error && activePage === 'Overview' && (
@@ -970,7 +1131,7 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && table && <section className="module-section">
             {(canSearch || isRecruiter && activePage === 'Applications') && <div className="module-heading">
               <div>
-                <h2>{activePage === 'Applications' && showArchivedApplications ? 'Archived applications' : activePage}</h2>
+                {(activePage !== 'Applications' || showArchivedApplications) && <h2>{activePage === 'Applications' ? 'Archived applications' : activePage}</h2>}
                 <p>{activePage === 'Applications'
                   ? showArchivedApplications
                     ? 'Archived applications are hidden from the active list and can be restored.'
@@ -1081,10 +1242,40 @@ function JobReportForm({ jobId }) {
   )
 }
 
+class DashboardErrorBoundary extends Component {
+  state = { error: null }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Dashboard page failed to render:', error, info)
+  }
+
+  handleRetry = () => this.setState({ error: null })
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main className="dashboard-render-error">
+          <section className="dashboard-render-error-card" role="alert">
+            <h1>This workspace page could not be displayed.</h1>
+            <p>{this.state.error.message || 'An unexpected rendering error occurred.'}</p>
+            <button type="button" className="green-button" onClick={this.handleRetry}>Try again</button>
+          </section>
+        </main>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
 export default function DashboardPage({ role }) {
   const { user } = useAuth()
   if (role !== user?.role) return <Loading />
-  return <DashboardWorkspace role={role} />
+  return <DashboardErrorBoundary><DashboardWorkspace role={role} /></DashboardErrorBoundary>
 }
 
 export function JobDetailsPage() {

@@ -633,6 +633,33 @@ router.get('/recruiter/candidates/:candidateId', requireUser, requireRoles('recr
   res.json({ candidate })
 })
 
+router.post('/recruiter/candidates/:candidateId/invitations', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const candidateId = validate(objectId, req.params.candidateId)
+  const { jobId } = validate(z.object({ jobId: objectId }).strict(), req.body)
+  const [candidate, job] = await Promise.all([
+    User.findOne({ _id: candidateId, role: 'candidate', status: 'active', openToOpportunities: true }).select('_id'),
+    Job.findOne({ _id: jobId, company: req.company._id, status: 'published' }).select('_id title'),
+  ])
+  if (!candidate) return res.status(404).json({ error: 'Candidate is not available to your organization.' })
+  if (!job) return res.status(404).json({ error: 'Published job not found for your organization.' })
+
+  const [existingApplication, existingInvitation] = await Promise.all([
+    Application.exists({ candidate: candidate._id, job: job._id }),
+    Notification.exists({ user: candidate._id, type: 'job_invitation', relatedId: job._id }),
+  ])
+  if (existingApplication) return res.status(409).json({ error: 'This candidate has already applied to this job.' })
+  if (existingInvitation) return res.status(409).json({ error: 'This candidate has already been invited to this job.' })
+
+  const notification = await Notification.create({
+    user: candidate._id,
+    type: 'job_invitation',
+    title: 'You’re invited to apply',
+    message: `${req.company.name} invites you to apply for ${job.title}. If you’re interested, submit an application. The organization may contact you to schedule an interview.`,
+    relatedId: job._id,
+  })
+  res.status(201).json({ notification })
+})
+
 router.get('/recruiter/applications/:applicationId/resume', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const id = validate(objectId, req.params.applicationId)
   const application = await Application.findOne({ _id: id, company: req.company._id }).select('resumeKey')

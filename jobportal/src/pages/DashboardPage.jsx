@@ -1841,11 +1841,20 @@ function DashboardWorkspace({ role }) {
       id: item._id, cells: [item.job?.title, item.job?.company?.name, item.job?.location, <button type="button" className="text-button" key="open" onClick={() => navigate(`/jobs/${item.job?._id}`)}>View job</button>], resource: item,
     }))} actions={(row) => <button type="button" className="org-action-button" onClick={() => mutate(() => api(`/candidate/saved-jobs/${row.resource.job?._id}`, { method: 'DELETE' }))}>Remove</button>} empty="Saved jobs will show up here." />
   } else if (isCandidate && activePage === 'Interviews') {
-    table = <DataTable columns={['Interview', 'Organization', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
+    table = <DataTable columns={['Interview', 'Organization', 'Date', 'Duration', 'Meeting', 'Notes']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,
-      cells: [item.application?.job?.title, item.company?.name, new Date(item.scheduledAt).toLocaleString(), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : 'Details in your invitation'],
+      cells: [
+        item.application?.job?.title,
+        item.company?.name,
+        new Date(item.scheduledAt).toLocaleString(undefined, {
+          ...(item.company?.timezone ? { timeZone: item.company.timezone, timeZoneName: 'short' } : {}),
+        }),
+        `${item.durationMinutes} minutes`,
+        item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : 'No meeting link provided',
+        item.notes || '—',
+      ],
       resource: item,
-    }))} empty="Upcoming interviews will appear here." />
+    }))} empty="Scheduled interviews will appear here." />
   } else if (activePage === 'Notifications' && (isCandidate || isRecruiter || isAdmin)) {
     const notificationBase = isCandidate ? '/candidate' : isRecruiter ? '/recruiter' : '/admin'
     table = <DataTable columns={['Notification', 'Message', 'Date']} rows={(viewData?.items || []).map((item) => ({

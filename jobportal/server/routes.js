@@ -1173,8 +1173,8 @@ router.delete('/candidate/notifications', requireUser, requireRoles('candidate')
 })
 
 router.get('/candidate/interviews', requireUser, requireRoles('candidate'), async (req, res) => {
-  const items = await Interview.find({ candidate: req.user._id, status: 'scheduled', scheduledAt: { $gte: new Date() } })
-    .sort({ scheduledAt: 1 }).populate({ path: 'application', populate: { path: 'job', select: 'title' } }).populate('company', 'name').lean()
+  const items = await Interview.find({ candidate: req.user._id, status: 'scheduled' })
+    .sort({ scheduledAt: 1 }).populate({ path: 'application', populate: { path: 'job', select: 'title' } }).populate('company', 'name timezone').lean()
   res.json({ items })
 })
 

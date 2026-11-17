@@ -21,7 +21,12 @@ import {
 import { requireCompanyMember, requirePrimaryAdmin, requireRoles, requireUser } from './middleware/auth.js'
 import { savePrivateFile, streamPrivateFile } from './storage.js'
 import { sendCompanyInvitationEmail, sendInterviewEmail } from './email.js'
-import { normalizeCandidateNotificationPreferences, normalizeRecruiterNotificationPreferences, notifyRecruiterMembers } from './notifications.js'
+import {
+  normalizeCandidateNotificationPreferences,
+  normalizeRecruiterNotificationPreferences,
+  notifyRecruiterMembers,
+  shouldSendCandidateNotification,
+} from './notifications.js'
 
 const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
@@ -518,14 +523,16 @@ router.post('/jobs/:jobId/applications', requireUser, requireRoles('candidate'),
   const jobId = validate(objectId, req.params.jobId)
   const job = await Job.findOne({ _id: jobId, status: 'published' }).populate('company', 'status name members')
   if (!job || job.company.status !== 'verified') return res.status(404).json({ error: 'This job is no longer available.' })
-  const candidate = await User.findById(req.user._id).select('resumeKey name')
+  const candidate = await User.findById(req.user._id).select('resumeKey name candidateNotificationPreferences')
   validateFileSignature(req.file)
   const resumeKey = req.file ? await savePrivateFile(req.file, `resumes/${candidate.id}`) : candidate.resumeKey
   if (!resumeKey) return res.status(400).json({ error: 'Upload a resume before applying.' })
   const input = validate(z.object({ coverLetter: z.string().trim().max(5000).optional().default('') }), req.body || {})
   try {
     const application = await Application.create({ candidate: candidate._id, job: job._id, company: job.company._id, resumeKey, coverLetter: input.coverLetter })
-    await Notification.create({ user: candidate._id, type: 'application_submitted', title: 'Application submitted', message: `Your application for ${job.title} was submitted.`, relatedId: application._id })
+    if (shouldSendCandidateNotification(candidate.candidateNotificationPreferences, 'applicationUpdates')) {
+      await Notification.create({ user: candidate._id, type: 'application_submitted', title: 'Application submitted', message: `Your application for ${job.title} was submitted.`, relatedId: application._id })
+    }
     await notifyRecruiterMembers({
       memberIds: job.company.members,
       companyId: job.company._id,
@@ -704,7 +711,7 @@ router.post('/recruiter/candidates/:candidateId/invitations', requireUser, requi
   const candidateId = validate(objectId, req.params.candidateId)
   const { jobId } = validate(z.object({ jobId: objectId }).strict(), req.body)
   const [candidate, job] = await Promise.all([
-    User.findOne({ _id: candidateId, role: 'candidate', status: 'active', openToOpportunities: true }).select('_id'),
+    User.findOne({ _id: candidateId, role: 'candidate', status: 'active', openToOpportunities: true }).select('_id candidateNotificationPreferences'),
     Job.findOne({ _id: jobId, company: req.company._id, status: 'published' }).select('_id title'),
   ])
   if (!candidate) return res.status(404).json({ error: 'Candidate is not available to your organization.' })
@@ -717,13 +724,16 @@ router.post('/recruiter/candidates/:candidateId/invitations', requireUser, requi
   if (existingApplication) return res.status(409).json({ error: 'This candidate has already applied to this job.' })
   if (existingInvitation) return res.status(409).json({ error: 'This candidate has already been invited to this job.' })
 
-  const notification = await Notification.create({
-    user: candidate._id,
-    type: 'job_invitation',
-    title: 'You’re invited to apply',
-    message: `${req.company.name} invites you to apply for ${job.title}. If you’re interested, submit an application. The organization may contact you to schedule an interview.`,
-    relatedId: job._id,
-  })
+  if (shouldSendCandidateNotification(candidate.candidateNotificationPreferences, 'jobMatches')) {
+    await Notification.create({
+      user: candidate._id,
+      type: 'job_invitation',
+      title: 'You’re invited to apply',
+      message: `${req.company.name} invites you to apply for ${job.title}. If you’re interested, submit an application. The organization may contact you to schedule an interview.`,
+      relatedId: job._id,
+    })
+  }
+  const notification = await Notification.findOne({ user: candidate._id, type: 'job_invitation', relatedId: job._id }).sort({ createdAt: -1 }).lean()
   res.status(201).json({ notification })
 })
 
@@ -887,7 +897,10 @@ router.patch('/recruiter/applications/:applicationId/status', requireUser, requi
   const { status } = validate(z.object({ status: z.enum(['under_review', 'shortlisted', 'interview_scheduled', 'selected', 'rejected']) }), req.body)
   const application = await Application.findOneAndUpdate({ _id: id, company: req.user.company, status: { $ne: 'withdrawn' } }, { status }, { new: true })
   if (!application) return res.status(404).json({ error: 'Application not found.' })
-  await Notification.create({ user: application.candidate, type: 'application_status', title: 'Application update', message: `Your application status changed to ${status.replaceAll('_', ' ')}.`, relatedId: application._id })
+  const candidate = await User.findById(application.candidate).select('candidateNotificationPreferences')
+  if (shouldSendCandidateNotification(candidate?.candidateNotificationPreferences, 'applicationUpdates')) {
+    await Notification.create({ user: application.candidate, type: 'application_status', title: 'Application update', message: `Your application status changed to ${status.replaceAll('_', ' ')}.`, relatedId: application._id })
+  }
   res.json({ application })
 })
 
@@ -910,7 +923,10 @@ router.post('/recruiter/applications/:applicationId/interviews', requireUser, re
     timeZone: req.company.timezone || 'UTC',
     timeZoneName: 'short',
   })
-  await Notification.create({ user: application.candidate._id, type: 'interview_scheduled', title: 'Interview scheduled', message: `An interview has been scheduled for ${interviewTime}.`, relatedId: interview._id })
+  const candidateRecord = await User.findById(application.candidate._id).select('candidateNotificationPreferences')
+  if (shouldSendCandidateNotification(candidateRecord?.candidateNotificationPreferences, 'interviewReminders')) {
+    await Notification.create({ user: application.candidate._id, type: 'interview_scheduled', title: 'Interview scheduled', message: `An interview has been scheduled for ${interviewTime}.`, relatedId: interview._id })
+  }
   let emailResult
   try {
     emailResult = await sendInterviewEmail({

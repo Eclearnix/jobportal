@@ -2244,6 +2244,59 @@ button {
   height: 64px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-notification-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #4f5f59;
+  background: transparent;
+  cursor: pointer;
+}
+
+.topbar-notification-button:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 2px;
+}
+
+.topbar-notification-bell {
+  transform-origin: 50% 8%;
+}
+
+.topbar-notification-button:hover .topbar-notification-bell,
+.topbar-notification-button:focus-visible .topbar-notification-bell {
+  animation: notification-bell-shake 650ms ease-in-out;
+}
+
+@keyframes notification-bell-shake {
+  0%, 100% { transform: rotate(0); }
+  15%, 45%, 75% { transform: rotate(14deg); }
+  30%, 60%, 90% { transform: rotate(-14deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-notification-bell {
+    animation: none !important;
+  }
+}
+
+.topbar-unread-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+}
+
 .user-avatar {
   display: grid;
   place-items: center;
@@ -3553,11 +3606,11 @@ button {
 
 .dashboard-shell .dashboard-sidebar .brand-wordmark { font-size: 19px; }
 .dashboard-shell .workspace-label,
-.dashboard-shell .nav-section-label { font-size: 11px; }
-.dashboard-shell .workspace-switcher strong { font-size: 12px; }
+.dashboard-shell .nav-section-label { font-size: 12px; }
+.dashboard-shell .workspace-switcher strong { font-size: 13px; }
 .dashboard-shell .workspace-switcher small,
 .dashboard-shell .dashboard-nav-item,
-.dashboard-shell .logout-button { font-size: 12px; }
+.dashboard-shell .logout-button { font-size: 13px; }
 .dashboard-shell .dashboard-nav-item {
   min-height: 44px;
   padding-top: 12px;

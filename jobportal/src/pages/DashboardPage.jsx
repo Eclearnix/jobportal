@@ -7,6 +7,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api, queryString } from '../services/api'
+import StaggeredMenu from '../components/StaggeredMenu'
 
 function UserAvatar({ name, picture }) {
   const [imageFailed, setImageFailed] = useState(false)
@@ -26,7 +27,7 @@ const navigation = {
   candidate: [
     ['Overview', LayoutDashboard], ['Find Jobs', Search], ['My Applications', ClipboardList],
     ['Saved Jobs', BriefcaseBusiness], ['My Profile', UserRound], ['Resume', FileText],
-    ['Interviews', BriefcaseBusiness], ['Notifications', Bell], ['Settings', Settings],
+    ['Interviews', BriefcaseBusiness], ['Notifications', Bell],
   ],
   recruiter: [
     ['Overview', LayoutDashboard], ['Post a Job', BriefcaseBusiness], ['Manage Jobs', ClipboardList],
@@ -291,7 +292,7 @@ function JobSearch({ onOpen, onSaved }) {
 
   return (
     <section className="module-section">
-      <div className="module-heading"><div><h2>Find your next opportunity</h2><p>Search verified openings from organizations on Eclearnix Jobs.</p></div></div>
+      <div className="module-heading"><div><p>Search verified openings from organizations on Eclearnix Jobs.</p></div></div>
       <form className="job-filter-form" onSubmit={search}>
         <input aria-label="Job title, skill, or company" placeholder="Job title, skill, or company" value={filters.q} onChange={(event) => setFilters({ ...filters, q: event.target.value })} />
         <input aria-label="Location" placeholder="Location" value={filters.location} onChange={(event) => setFilters({ ...filters, location: event.target.value })} />
@@ -454,37 +455,35 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
   )
 }
 
-function CandidateSettings({ profile, notificationPreferences, onSaved }) {
+const defaultCandidateNotificationPreferences = {
+  jobMatches: { inApp: true, email: false },
+  applicationUpdates: { inApp: true, email: false },
+  interviewReminders: { inApp: true, email: true },
+}
+
+function CandidateSettings({ notificationPreferences, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [preferences, setPreferences] = useState(notificationPreferences || {
-    jobMatches: { inApp: true, email: false },
-    applicationUpdates: { inApp: true, email: false },
-    interviewReminders: { inApp: true, email: true },
-  })
+  const [preferences, setPreferences] = useState(defaultCandidateNotificationPreferences)
 
   useEffect(() => {
-    if (notificationPreferences) {
-      setPreferences(notificationPreferences)
-    }
+    setPreferences((current) => ({
+      ...defaultCandidateNotificationPreferences,
+      ...current,
+      ...(notificationPreferences || {}),
+    }))
   }, [notificationPreferences])
-
-  async function updateProfileVisibility(checked) {
-    try {
-      await api('/candidate/profile', { method: 'PATCH', body: { openToOpportunities: checked } })
-      await onSaved()
-    } catch (saveError) {
-      setError(saveError.message)
-    }
-  }
 
   async function savePreferences(event) {
     event.preventDefault()
     setBusy(true)
     setError('')
     try {
-      await api('/candidate/settings/notifications', { method: 'PATCH', body: { notificationPreferences: preferences } })
+      const result = await api('/candidate/settings/notifications', { method: 'PATCH', body: { notificationPreferences: preferences } })
+      const nextPreferences = result.notificationPreferences || preferences
+      setPreferences(nextPreferences)
       await onSaved()
+      window.alert('Settings updated')
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -492,12 +491,12 @@ function CandidateSettings({ profile, notificationPreferences, onSaved }) {
     }
   }
 
-  function toggleChannel(key, channel) {
+  function toggleChannel(key, channel, checked) {
     setPreferences((current) => ({
       ...current,
       [key]: {
         ...current[key],
-        [channel]: !current[key]?.[channel],
+        [channel]: checked,
       },
     }))
   }
@@ -506,11 +505,6 @@ function CandidateSettings({ profile, notificationPreferences, onSaved }) {
     <section className="module-section job-seeker-settings">
       <div className="module-heading"><div><p>Control how employers find you and how you receive updates.</p></div></div>
       <form className="module-form" onSubmit={savePreferences}>
-        <label className="checkbox-field">
-          <input type="checkbox" checked={!!profile?.openToOpportunities} onChange={(event) => updateProfileVisibility(event.target.checked)} />
-          <span><strong>Open to opportunities</strong><small>Let verified organizations discover your profile and contact you with relevant roles.</small></span>
-        </label>
-
         <div className="settings-notification-grid">
           <div className="settings-notification-heading"><span>Update</span><span>In-app</span><span>Email</span></div>
           {Object.entries({
@@ -520,8 +514,8 @@ function CandidateSettings({ profile, notificationPreferences, onSaved }) {
           }).map(([key, label]) => (
             <div className="settings-notification-row" key={key}>
               <div><strong>{label}</strong></div>
-              <div className="checkbox-field"><input type="checkbox" checked={!!preferences[key]?.inApp} onChange={() => toggleChannel(key, 'inApp')} /></div>
-              <div className="checkbox-field"><input type="checkbox" checked={!!preferences[key]?.email} onChange={() => toggleChannel(key, 'email')} /></div>
+              <div className="checkbox-field"><input type="checkbox" checked={Boolean(preferences[key]?.inApp)} onChange={(event) => toggleChannel(key, 'inApp', event.target.checked)} /></div>
+              <div className="checkbox-field"><input type="checkbox" checked={Boolean(preferences[key]?.email)} onChange={(event) => toggleChannel(key, 'email', event.target.checked)} /></div>
             </div>
           ))}
         </div>
@@ -1221,11 +1215,21 @@ function DashboardWorkspace({ role }) {
             </button>
           })}
         </nav>
-        <button type="button" className="logout-button" onClick={async () => { await signOut(); navigate('/login', { replace: true }) }}><LogOut size={15} /> Sign out</button>
+        {!isCandidate && <button type="button" className="logout-button" onClick={async () => { await signOut(); navigate('/login', { replace: true }) }}><LogOut size={15} /> Sign out</button>}
       </aside>
 
       <main className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions">{isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}<UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></div></header>
+        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions">{isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}{isCandidate && <button type="button" className="topbar-notification-button" aria-label="Open notifications" onClick={() => goTo('Notifications')}>{payload?.summary?.unreadNotifications > 0 && <span className="notification-unread-dot topbar-unread-dot" aria-hidden="true" />}<Bell className="topbar-notification-bell" size={20} /></button>}{isCandidate ? <StaggeredMenu
+          className="profile-staggered-menu"
+          displayItemNumbering={false}
+          trigger={<><UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></>}
+          items={[
+            { label: 'Recruiter actions', icon: <Users size={16} />, onClick: () => goTo('Notifications') },
+            { label: 'View & update profile', icon: <UserRound size={16} />, onClick: () => goTo('My Profile') },
+            { label: 'Settings', icon: <Settings size={16} />, onClick: () => goTo('Settings') },
+            { label: 'Logout', icon: <LogOut size={16} />, onClick: async () => { await signOut(); navigate('/login', { replace: true }) } },
+          ]}
+        /> : <><UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></>}</div></header>
         <div className="dashboard-content">
           <div className="dashboard-welcome"><div><div className="date-line">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div><h1>{title}</h1><p>{isAdmin ? 'Manage people, organizations, and the standards that make this marketplace trusted.' : isRecruiter ? `Your organization is ${payload?.company?.status || 'loading'} · see what needs your attention today.` : 'A thoughtful next step can bring the right opportunity closer.'}</p></div>
             {isCandidate && <button className="green-button" type="button" onClick={() => goTo('My Profile')}>Complete profile <ArrowRight size={14} /></button>}
@@ -1266,7 +1270,7 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && isRecruiter && activePage === 'Settings' && <OrganizationSettings settings={viewData} reload={reload} />}
           {!loading && !error && isAdmin && activePage === 'Admin Management' && <AdminInvites data={viewData} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Company Profile' && <CompanyProfile company={viewData?.company} onSaved={reload} />}
-          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateSettings profile={viewData?.profile || payload?.profile} notificationPreferences={viewData?.notificationPreferences || payload?.notificationPreferences} onSaved={reload} />}
+          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateSettings notificationPreferences={viewData?.notificationPreferences || payload?.notificationPreferences} onSaved={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} timeZone={organizationTimeZone} />}
           {!loading && !error && table && <section className="module-section">
             {isCandidate && activePage === 'My Applications' && <div className="candidate-applications-toolbar">

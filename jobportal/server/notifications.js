@@ -35,6 +35,11 @@ export function normalizeCandidateNotificationPreferences(preferences = {}) {
   ]))
 }
 
+export function shouldSendCandidateNotification(preferences = {}, key, channel = 'inApp') {
+  const normalized = normalizeCandidateNotificationPreferences(preferences)
+  return Boolean(normalized[key]?.[channel])
+}
+
 export async function notifyRecruiterMembers({
   memberIds,
   companyId,

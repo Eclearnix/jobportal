@@ -1,8 +1,8 @@
 import { Component, cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, ClipboardList, FileText,
-  LayoutDashboard, LogOut, Search, Settings, Shield, Users, UserRound, X,
+  ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, ClipboardList, Code2, ExternalLink,
+  FileText, ImagePlus, LayoutDashboard, LogOut, Plus, Search, Settings, Shield, Trash2, Trophy, Users, UserRound, X,
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -50,12 +50,21 @@ const paths = {
 
 const slug = (value) => value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/(^-|-$)/g, '')
 const humanize = (value = '') => value.replaceAll('_', ' ').replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+const codingPlatforms = [
+  { key: 'leetcode', label: 'LeetCode', baseUrl: 'https://leetcode.com/u/' },
+  { key: 'codechef', label: 'CodeChef', baseUrl: 'https://www.codechef.com/users/' },
+  { key: 'hackerrank', label: 'HackerRank', baseUrl: 'https://www.hackerrank.com/profile/' },
+]
+const codingProfileUrl = (platform, username) => `${codingPlatforms.find((item) => item.key === platform)?.baseUrl || ''}${encodeURIComponent(username)}`
 const dateLabel = (value, timeZone) => value ? new Date(value).toLocaleDateString(undefined, {
   month: 'short',
   day: 'numeric',
   year: 'numeric',
   ...(timeZone ? { timeZone } : {}),
 }) : '—'
+const isInterviewCompleted = (interview) => interview.status === 'completed'
+  || interview.status === 'scheduled'
+    && new Date(interview.scheduledAt).getTime() + interview.durationMinutes * 60_000 <= Date.now()
 
 function Loading({ message = 'Loading your workspace…' }) {
   return <div className="workspace-loading" role="status"><span className="loading-spinner" />{message}</div>
@@ -220,18 +229,275 @@ function CandidateInvitePanel({ candidateId }) {
   )
 }
 
+function LeetCodeDashboard({ username, stats, onRefresh, refreshing = false, error = '' }) {
+  const dayMilliseconds = 24 * 60 * 60 * 1000
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  const firstDay = new Date(today.getTime() - 364 * dayMilliseconds)
+  const gridStart = new Date(firstDay.getTime() - firstDay.getUTCDay() * dayMilliseconds)
+  const weekCount = Math.ceil((today.getTime() - gridStart.getTime() + dayMilliseconds) / (7 * dayMilliseconds))
+  const activity = new Map((stats?.activity || []).map((day) => [day.date, day.count]))
+  const weeks = Array.from({ length: weekCount }, (_, weekIndex) => {
+    const days = Array.from({ length: 7 }, (_, dayIndex) => {
+      const date = new Date(gridStart.getTime() + (weekIndex * 7 + dayIndex) * dayMilliseconds)
+      const key = date.toISOString().slice(0, 10)
+      const inRange = date >= firstDay && date <= today
+      return { key, count: inRange ? activity.get(key) || 0 : 0, inRange }
+    })
+    return { key: days[0].key, days }
+  })
+  const monthStarts = []
+  weeks.forEach((week, weekIndex) => {
+    const monthStart = week.days.find((day) => day.inRange && day.key.endsWith('-01'))
+    if (monthStart && !monthStarts.some((month) => month.weekIndex === weekIndex)) {
+      monthStarts.push({
+        weekIndex,
+        label: new Date(`${monthStart.key}T00:00:00.000Z`).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }),
+      })
+    }
+  })
+  const firstVisibleDate = weeks[0]?.days.find((day) => day.inRange)?.key
+  if (firstVisibleDate && monthStarts[0]?.weekIndex !== 0) {
+    monthStarts.unshift({
+      weekIndex: 0,
+      label: new Date(`${firstVisibleDate}T00:00:00.000Z`).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }),
+    })
+  }
+  const monthLabels = monthStarts.map((month, index) => ({
+    ...month,
+    span: Math.max((monthStarts[index + 1]?.weekIndex ?? weeks.length) - month.weekIndex, 1),
+  }))
+  const firstMonth = new Date(Date.UTC(firstDay.getUTCFullYear(), firstDay.getUTCMonth(), 1))
+  const monthCount = (today.getUTCFullYear() - firstMonth.getUTCFullYear()) * 12
+    + today.getUTCMonth() - firstMonth.getUTCMonth() + 1
+  const monthlyCounts = new Map()
+  for (const day of stats?.activity || []) {
+    const month = day.date.slice(0, 7)
+    monthlyCounts.set(month, (monthlyCounts.get(month) || 0) + day.count)
+  }
+  const monthlySubmissions = Array.from({ length: monthCount }, (_, index) => {
+    const date = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + index, 1))
+    const key = date.toISOString().slice(0, 7)
+    const monthName = date.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' })
+    const year = date.getUTCFullYear() === today.getUTCFullYear() ? '' : ` '${String(date.getUTCFullYear()).slice(-2)}`
+    return { key, label: `${monthName}${year}`, count: monthlyCounts.get(key) || 0 }
+  })
+  const maxMonthlySubmissions = Math.max(1, ...monthlySubmissions.map((month) => month.count))
+  const solved = Number(stats?.solved || 0)
+  const totalQuestions = Number(stats?.totalQuestions || 0)
+  const solvedPercent = totalQuestions ? Math.min(100, Math.round(solved / totalQuestions * 100)) : 0
+  const badges = stats?.badges || []
+  const recentBadge = badges[0] || (stats?.activeBadge?.name ? stats.activeBadge : null)
+  const profileUrl = codingProfileUrl('leetcode', username)
+  const hasDashboardStats = Number(stats?.totalQuestions) > 0
+
+  return (
+    <section className="leetcode-dashboard" aria-label="LeetCode dashboard">
+      <header className="leetcode-dashboard-header">
+        <div><h4>LeetCode dashboard</h4><span>@{username}{stats?.updatedAt ? ` · Updated ${dateLabel(stats.updatedAt)}` : ''}</span></div>
+        <div className="leetcode-dashboard-actions">
+          <a href={profileUrl} target="_blank" rel="noreferrer">Open LeetCode <ExternalLink size={13} /></a>
+          {onRefresh && <button type="button" className="subtle-button" onClick={onRefresh} disabled={refreshing}>{refreshing ? 'Updating…' : 'Update stats'}</button>}
+        </div>
+      </header>
+      {hasDashboardStats
+        ? <>
+          <div className="leetcode-dashboard-overview">
+            <section className="leetcode-dashboard-card leetcode-solved-card">
+              <div className="leetcode-solved-ring" style={{ '--solved-percent': `${solvedPercent}%` }}>
+                <div><strong>{solved.toLocaleString()}</strong><span> / {totalQuestions.toLocaleString()}</span><small>Solved</small></div>
+              </div>
+              <div className="leetcode-difficulty-list">
+                {[
+                  ['Easy', stats.solvedEasy, stats.totalEasy],
+                  ['Medium', stats.solvedMedium, stats.totalMedium],
+                  ['Hard', stats.solvedHard, stats.totalHard],
+                ].map(([label, count, total]) => <div className={`leetcode-difficulty leetcode-difficulty-${label.toLowerCase()}`} key={label}>
+                  <strong>{label}</strong><span>{Number(count || 0).toLocaleString()} / {Number(total || 0).toLocaleString()}</span>
+                </div>)}
+              </div>
+            </section>
+            <section className="leetcode-dashboard-card leetcode-badges-card">
+              <div className="leetcode-badges-count"><span>Badges</span><strong>{Number(stats.badgeCount || badges.length).toLocaleString()}</strong></div>
+              <div className="leetcode-badge-list">
+                {badges.slice(0, 4).map((badge, index) => <div className="leetcode-badge-icon" key={`${badge.name}-${index}`} title={badge.name}>
+                  {badge.icon ? <img src={badge.icon} alt={badge.name} loading="lazy" referrerPolicy="no-referrer" /> : <Trophy size={22} aria-hidden="true" />}
+                </div>)}
+                {!badges.length && stats.activeBadge?.icon && <div className="leetcode-badge-icon"><img src={stats.activeBadge.icon} alt={stats.activeBadge.name} loading="lazy" referrerPolicy="no-referrer" /></div>}
+                {!badges.length && !stats.activeBadge?.icon && <span className="leetcode-no-badges">No badges yet</span>}
+              </div>
+              <div className="leetcode-recent-badge"><span>Most recent badge</span><strong>{recentBadge?.name || 'No badge earned yet'}</strong></div>
+            </section>
+          </div>
+          <section className="leetcode-dashboard-card leetcode-activity-card">
+            <div className="leetcode-activity-heading">
+              <h5><strong>{Number(stats.submissionsPastYear || 0).toLocaleString()}</strong> submissions in the past one year</h5>
+              <div><span>Total active days: <strong>{Number(stats.activeDays || 0).toLocaleString()}</strong></span><span>Max streak: <strong>{Number(stats.maxStreak || 0).toLocaleString()}</strong></span><span className="leetcode-period-label">Past year</span></div>
+            </div>
+            <div className="leetcode-heatmap-scroll">
+              <div className="leetcode-heatmap">
+                <div className="leetcode-month-labels" style={{ '--week-count': weeks.length }}>
+                  {monthLabels.map((month) => <span key={`${month.weekIndex}-${month.label}`} style={{ gridColumn: `${month.weekIndex + 1} / span ${month.span}` }}>{month.label}</span>)}
+                </div>
+                <div className="leetcode-heatmap-weeks">
+                  {weeks.map((week) => <div className="leetcode-heatmap-week" key={week.key}>
+                    {week.days.map((day) => <span
+                      className={`leetcode-heatmap-day${day.inRange ? '' : ' leetcode-heatmap-day-outside'}`}
+                      data-level={day.count === 0 ? 0 : day.count < 3 ? 1 : day.count < 6 ? 2 : day.count < 10 ? 3 : 4}
+                      key={day.key}
+                      title={day.inRange ? `${day.count} submissions on ${day.key}` : ''}
+                      aria-label={day.inRange ? `${day.count} submissions on ${day.key}` : undefined}
+                    />)}
+                  </div>)}
+                </div>
+              </div>
+            </div>
+            <div className="leetcode-monthly-submissions">
+              <h6>Submissions by month</h6>
+              <div className="leetcode-monthly-submission-grid">
+                {monthlySubmissions.map((month) => <div className="leetcode-monthly-submission" key={month.key} title={`${month.count.toLocaleString()} submissions in ${month.label}`}>
+                  <div><span>{month.label}</span><strong>{month.count.toLocaleString()}</strong></div>
+                  <div className="leetcode-monthly-submission-track"><span style={{ width: `${month.count / maxMonthlySubmissions * 100}%` }} /></div>
+                </div>)}
+              </div>
+            </div>
+            {error && <p className="auth-error" role="alert">{error}</p>}
+          </section>
+        </>
+        : <div className="leetcode-dashboard-empty">
+          <p>{refreshing ? 'Loading your LeetCode dashboard…' : onRefresh ? 'Update stats to load your problem totals, badges, and activity calendar.' : 'The candidate has not loaded their LeetCode dashboard yet.'}</p>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+        </div>}
+    </section>
+  )
+}
+
+function HackerRankDashboard({ username, stats, onRefresh, refreshing = false, error = '' }) {
+  const profileUrl = codingProfileUrl('hackerrank', username)
+  const tracks = stats?.tracks || []
+  const badges = stats?.badges || []
+  const hasStats = Boolean(stats?.updatedAt)
+  const formatRank = (value) => Number.isFinite(value) && value > 0 ? `#${value.toLocaleString()}` : '—'
+
+  return (
+    <section className="hackerrank-dashboard" aria-label="HackerRank dashboard">
+      <header className="hackerrank-dashboard-header">
+        <div><h4>HackerRank dashboard</h4><span>@{username}{stats?.updatedAt ? ` · Updated ${dateLabel(stats.updatedAt)}` : ''}</span></div>
+        <div className="hackerrank-dashboard-actions">
+          <a href={profileUrl} target="_blank" rel="noreferrer">Open HackerRank <ExternalLink size={13} /></a>
+          {onRefresh && <button type="button" className="subtle-button" onClick={onRefresh} disabled={refreshing}>{refreshing ? 'Updating…' : 'Update stats'}</button>}
+        </div>
+      </header>
+      {hasStats
+        ? <>
+          <div className="hackerrank-dashboard-overview">
+            <div className="hackerrank-dashboard-stat"><span>Challenges solved</span><strong>{Number(stats.challengesSolved || 0).toLocaleString()}</strong></div>
+            <div className="hackerrank-dashboard-stat"><span>Practice points</span><strong>{Number(stats.totalPracticePoints || 0).toLocaleString()}</strong></div>
+            <div className="hackerrank-dashboard-stat"><span>Contest points</span><strong>{Number(stats.totalContestPoints || 0).toLocaleString()}</strong></div>
+            <div className="hackerrank-dashboard-stat"><span>Badges earned</span><strong>{Number(stats.badgeCount || 0).toLocaleString()}</strong></div>
+          </div>
+          <section className="hackerrank-dashboard-card">
+            <div className="hackerrank-dashboard-section-heading"><h5>Skill tracks</h5><span>{Number(stats.trackCount || 0).toLocaleString()} active</span></div>
+            {tracks.length
+              ? <div className="hackerrank-track-list">
+                {tracks.map((track) => <article className="hackerrank-track" key={track.slug || track.name}>
+                  <strong>{track.name}</strong>
+                  <span>Practice: {Number(track.practiceScore || 0).toLocaleString()} points · Rank {formatRank(track.practiceRank)}</span>
+                  <span>Contest: {Number(track.contestScore || 0).toLocaleString()} points · Rank {formatRank(track.contestRank)}</span>
+                  {(track.goldMedals + track.silverMedals + track.bronzeMedals) > 0 && <span>Medals: {track.goldMedals} gold · {track.silverMedals} silver · {track.bronzeMedals} bronze</span>}
+                </article>)}
+              </div>
+              : <p className="hackerrank-dashboard-empty-text">No scored skill tracks yet.</p>}
+          </section>
+          <section className="hackerrank-dashboard-card">
+            <div className="hackerrank-dashboard-section-heading"><h5>Badges</h5><span>{badges.length ? 'Earned badges' : 'None earned yet'}</span></div>
+            {badges.length
+              ? <div className="hackerrank-badge-list">
+                {badges.map((badge, index) => <article className="hackerrank-badge" key={`${badge.badgeType}-${badge.name}-${index}`}>
+                  <Trophy size={20} aria-hidden="true" />
+                  <div><strong>{badge.name}</strong><span>{badge.stars} stars · {badge.solved.toLocaleString()} solved · {badge.points.toLocaleString()} points</span></div>
+                </article>)}
+              </div>
+              : <p className="hackerrank-dashboard-empty-text">No badges are available for this profile yet.</p>}
+          </section>
+        </>
+        : <div className="hackerrank-dashboard-empty">
+          <p>{refreshing ? 'Loading your HackerRank dashboard…' : onRefresh ? 'Update stats to load your challenge totals, skill tracks, and badges.' : 'The candidate has not loaded their HackerRank dashboard yet.'}</p>
+        </div>}
+      {error && <p className="auth-error" role="alert">{error}</p>}
+    </section>
+  )
+}
+
 function CandidatePreview({ candidate, onClose, canInvite = false }) {
   const [showInvite, setShowInvite] = useState(false)
+  const photoUrl = candidate.profilePhotoKey
+    ? `/api/recruiter/candidates/${candidate._id}/assets/photo`
+    : candidate.picture
 
   return (
     <div className="candidate-preview-backdrop" role="presentation" onClick={onClose}>
       <section className="candidate-preview" role="dialog" aria-modal="true" aria-labelledby="candidate-preview-title" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="candidate-preview-close" aria-label="Close candidate profile" onClick={onClose}>×</button>
-        <h2 id="candidate-preview-title">{candidate.name}</h2>
-        <p>{candidate.title || 'Candidate'} · {candidate.location || 'Location not provided'}</p>
+        {candidate.profileBannerKey && <img className="candidate-preview-banner" src={`/api/recruiter/candidates/${candidate._id}/assets/banner?v=${encodeURIComponent(candidate.profileBannerKey)}`} alt="" />}
+        <div className="candidate-preview-identity">
+          <UserAvatar name={candidate.name} picture={photoUrl} />
+          <div>
+            <h2 id="candidate-preview-title">{candidate.name}</h2>
+            <p>{candidate.title || 'Candidate'} · {candidate.location || 'Location not provided'}</p>
+          </div>
+        </div>
         <a href={`mailto:${candidate.email}`}>{candidate.email}</a>
+        {candidate.about && <><h3>About</h3><p className="candidate-preview-about">{candidate.about}</p></>}
         <h3>Skills</h3>
         <p>{candidate.skills?.length ? candidate.skills.join(', ') : 'No skills listed yet.'}</p>
+        {candidate.portfolioUrl && <section className="candidate-preview-links">
+          <h3>Portfolio</h3>
+          <a href={candidate.portfolioUrl} target="_blank" rel="noreferrer">{candidate.portfolioUrl} <ExternalLink size={13} /></a>
+        </section>}
+        {candidate.projects?.length > 0 && <section className="candidate-preview-projects">
+          <h3>Projects</h3>
+          {candidate.projects.map((project, index) => <article className="candidate-preview-project" key={`${project.title}-${index}`}>
+            <strong>{project.title}</strong>
+            {project.description && <p>{project.description}</p>}
+            <div className="candidate-preview-project-links">
+              {project.liveUrl && <a href={project.liveUrl} target="_blank" rel="noreferrer">Live project <ExternalLink size={13} /></a>}
+              {project.repositoryUrl && <a href={project.repositoryUrl} target="_blank" rel="noreferrer">Source code <ExternalLink size={13} /></a>}
+            </div>
+          </article>)}
+        </section>}
+        {candidate.certifications?.length > 0 && <section className="candidate-preview-certifications">
+          <h3>Certifications &amp; achievements</h3>
+          {candidate.certifications.map((item) => <article className="candidate-preview-certification" key={item._id}>
+            <div className="candidate-preview-certification-heading">
+              <strong>{item.title}</strong>
+              <span>{item.kind === 'certificate' ? 'Certificate' : 'Achievement'}</span>
+            </div>
+            {(item.issuer || item.issueDate) && <p>{[item.issuer, item.issueDate && dateLabel(item.issueDate)].filter(Boolean).join(' · ')}</p>}
+            {item.description && <p>{item.description}</p>}
+            <div className="candidate-preview-project-links">
+              {item.credentialUrl && <a href={item.credentialUrl} target="_blank" rel="noreferrer">Credential link <ExternalLink size={13} /></a>}
+              {item.fileKey && <a href={`/api/recruiter/candidates/${candidate._id}/certifications/${item._id}/file`} target="_blank" rel="noreferrer">View uploaded file <ExternalLink size={13} /></a>}
+            </div>
+          </article>)}
+        </section>}
+        {candidate.codingProfiles?.length > 0 && <section className="candidate-preview-coding">
+          <h3>Coding profiles</h3>
+          {candidate.codingProfiles.map(({ platform, username }) => {
+            return <article className="candidate-preview-platform" key={platform}>
+              <div><strong>{codingPlatforms.find((item) => item.key === platform)?.label || platform}</strong><span>@{username}</span></div>
+              <a href={codingProfileUrl(platform, username)} target="_blank" rel="noreferrer">View profile <ExternalLink size={13} /></a>
+            </article>
+          })}
+          {candidate.codingProfiles.some((item) => item.platform === 'leetcode') && <LeetCodeDashboard
+            username={candidate.codingProfiles.find((item) => item.platform === 'leetcode').username}
+            stats={candidate.leetcodeStats}
+          />}
+          {candidate.codingProfiles.some((item) => item.platform === 'hackerrank') && <HackerRankDashboard
+            username={candidate.codingProfiles.find((item) => item.platform === 'hackerrank').username}
+            stats={candidate.hackerrankStats}
+          />}
+        </section>}
         {candidate.experience?.length > 0 && <>
           <h3>Experience</h3>
           {candidate.experience.map((item, index) => <p key={`${item.company}-${index}`}><strong>{item.title}</strong> · {item.company}{item.summary ? ` — ${item.summary}` : ''}</p>)}
@@ -375,35 +641,379 @@ function JobPostForm({ onCreated }) {
   )
 }
 
+function BannerCropModal({ sourceUrl, onClose, onSave }) {
+  const frameRef = useRef(null)
+  const imageRef = useRef(null)
+  const dragStart = useRef(null)
+  const [frameSize, setFrameSize] = useState({ width: 0, height: 0 })
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame) return undefined
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      setFrameSize({ width: entry.contentRect.width, height: entry.contentRect.height })
+    })
+    resizeObserver.observe(frame)
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  useEffect(() => {
+    function closeOnEscape(event) {
+      if (event.key === 'Escape' && !saving) onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose, saving])
+
+  const coverScale = imageSize.width && frameSize.width
+    ? Math.max(frameSize.width / imageSize.width, frameSize.height / imageSize.height)
+    : 0
+  const renderedWidth = imageSize.width * coverScale * zoom
+  const renderedHeight = imageSize.height * coverScale * zoom
+  const maxPanX = Math.max(0, (renderedWidth - frameSize.width) / 2)
+  const maxPanY = Math.max(0, (renderedHeight - frameSize.height) / 2)
+
+  function startDragging(event) {
+    if (!imageSize.width) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragStart.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }
+  }
+
+  function dragImage(event) {
+    const start = dragStart.current
+    if (!start) return
+    setPan({
+      x: maxPanX ? Math.max(-1, Math.min(1, start.panX + (event.clientX - start.x) / maxPanX)) : 0,
+      y: maxPanY ? Math.max(-1, Math.min(1, start.panY + (event.clientY - start.y) / maxPanY)) : 0,
+    })
+  }
+
+  function stopDragging() {
+    dragStart.current = null
+  }
+
+  async function saveCrop() {
+    if (!imageRef.current || !frameSize.width || !coverScale) return
+    setSaving(true)
+    setError('')
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1600
+      canvas.height = 400
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Your browser could not prepare the banner image.')
+      const sourceX = (renderedWidth - frameSize.width) / (2 * coverScale * zoom) - pan.x * maxPanX / (coverScale * zoom)
+      const sourceY = (renderedHeight - frameSize.height) / (2 * coverScale * zoom) - pan.y * maxPanY / (coverScale * zoom)
+      const sourceWidth = frameSize.width / (coverScale * zoom)
+      const sourceHeight = frameSize.height / (coverScale * zoom)
+      context.drawImage(imageRef.current, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height)
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((result) => result ? resolve(result) : reject(new Error('The cropped banner could not be created.')), 'image/jpeg', 0.92)
+      })
+      const croppedFile = new File([blob], 'profile-banner.jpg', { type: 'image/jpeg' })
+      await onSave(croppedFile)
+      onClose()
+    } catch (cropError) {
+      setError(cropError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="banner-cropper-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget && !saving) onClose() }}>
+      <section className="banner-cropper-dialog" role="dialog" aria-modal="true" aria-labelledby="banner-cropper-title">
+        <div className="banner-cropper-heading">
+          <div><h2 id="banner-cropper-title">Adjust your banner</h2><p>Drag the image or use the controls to frame it. The preview shows the banner crop.</p></div>
+          <button type="button" aria-label="Close banner cropper" onClick={onClose} disabled={saving}><X size={20} /></button>
+        </div>
+        <div
+          className="banner-cropper-frame"
+          ref={frameRef}
+          onPointerDown={startDragging}
+          onPointerMove={dragImage}
+          onPointerUp={stopDragging}
+          onPointerCancel={stopDragging}
+          style={{ cursor: imageSize.width ? 'grab' : 'wait' }}
+        >
+          {sourceUrl && <img
+            ref={imageRef}
+            className="banner-cropper-image"
+            src={sourceUrl}
+            alt=""
+            draggable="false"
+            onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
+            onError={() => setError('This image could not be opened. Try a JPG, PNG, or WebP file.')}
+            style={{
+              width: renderedWidth,
+              height: renderedHeight,
+              transform: `translate(calc(-50% + ${pan.x * maxPanX}px), calc(-50% + ${pan.y * maxPanY}px))`,
+            }}
+          />}
+          {!imageSize.width && <span>Preparing image…</span>}
+        </div>
+        <div className="banner-cropper-controls">
+          <label>Zoom<input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label>
+          <label>Horizontal position<input type="range" min="-1" max="1" step="0.01" value={pan.x} onChange={(event) => setPan((current) => ({ ...current, x: Number(event.target.value) }))} /></label>
+          <label>Vertical position<input type="range" min="-1" max="1" step="0.01" value={pan.y} onChange={(event) => setPan((current) => ({ ...current, y: Number(event.target.value) }))} /></label>
+        </div>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <div className="banner-cropper-actions">
+          <button type="button" className="subtle-button" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="button" className="green-button" onClick={saveCrop} disabled={saving || !imageSize.width}>{saving ? 'Saving…' : 'Use banner'}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved, showHeading = true, largeText = false }) {
+  const profileTabs = [
+    { key: 'basic', label: 'Basic information' },
+    { key: 'coding', label: 'Coding and performance' },
+    { key: 'projects', label: 'Project URLs & repositories' },
+    { key: 'certifications', label: 'Certifications & achievements' },
+  ]
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [activeProfileTab, setActiveProfileTab] = useState('basic')
   const [resumeBusy, setResumeBusy] = useState(false)
   const [resumeError, setResumeError] = useState('')
+  const [imageBusy, setImageBusy] = useState({ photo: false, banner: false })
+  const [imageError, setImageError] = useState('')
+  const [bannerCropFile, setBannerCropFile] = useState(null)
+  const [projects, setProjects] = useState(() => profile?.projects || [])
+  const [certifications, setCertifications] = useState(() => (profile?.certifications || []).map((item) => ({ ...item, clientKey: String(item._id) })))
+  const [certificationFiles, setCertificationFiles] = useState({})
+  const [codingUsernames, setCodingUsernames] = useState(() => Object.fromEntries(
+    codingPlatforms.map(({ key }) => [key, profile?.codingProfiles?.find((item) => item.platform === key)?.username || '']),
+  ))
+  const [statsBusy, setStatsBusy] = useState(false)
+  const [statsError, setStatsError] = useState('')
+  const [leetcodeStats, setLeetcodeStats] = useState(profile?.leetcodeStats)
+  const [hackerrankStats, setHackerrankStats] = useState(profile?.hackerrankStats)
+  const [hackerrankStatsBusy, setHackerrankStatsBusy] = useState(false)
+  const [hackerrankStatsError, setHackerrankStatsError] = useState('')
+  const [leetcodeStatsUsername, setLeetcodeStatsUsername] = useState(() => (
+    profile?.codingProfiles?.find((item) => item.platform === 'leetcode')?.username || ''
+  ))
+  const [hackerrankStatsUsername, setHackerrankStatsUsername] = useState(() => (
+    profile?.codingProfiles?.find((item) => item.platform === 'hackerrank')?.username || ''
+  ))
+  const autoRefreshAttempted = useRef(new Set())
+
+  useEffect(() => {
+    const sourceUrl = bannerCropFile?.url
+    return () => { if (sourceUrl) URL.revokeObjectURL(sourceUrl) }
+  }, [bannerCropFile])
 
   async function saveProfile(event) {
     event.preventDefault()
+    const formElement = event.currentTarget
+    const invalidField = Array.from(formElement.elements).find((field) => field.willValidate && !field.checkValidity())
+    if (invalidField) {
+      const invalidPanel = invalidField.closest('[data-profile-tab]')
+      if (invalidPanel?.hidden) {
+        setActiveProfileTab(invalidPanel.dataset.profileTab)
+        window.requestAnimationFrame(() => {
+          invalidField.focus()
+          invalidField.reportValidity()
+        })
+      } else {
+        invalidField.reportValidity()
+      }
+      return
+    }
     setBusy(true)
     setError('')
     onProfileSaveStart()
-    const form = new FormData(event.currentTarget)
+    const form = new FormData(formElement)
     try {
-      await api('/candidate/profile', { method: 'PATCH', body: {
+      const certificationsToSave = certifications.filter((item) => item.title?.trim())
+      const { user: savedProfile } = await api('/candidate/profile', { method: 'PATCH', body: {
         name: form.get('name'),
         title: form.get('title'),
+        about: form.get('about'),
         phone: form.get('phone'),
         location: form.get('location'),
+        portfolioUrl: form.get('portfolioUrl'),
         skills: String(form.get('skills') || '').split(',').map((item) => item.trim()).filter(Boolean),
         preferredLocations: String(form.get('preferredLocations') || '').split(',').map((item) => item.trim()).filter(Boolean),
+        projects: projects.filter((project) => project.title?.trim()).map((project) => ({
+          title: project.title.trim(),
+          description: project.description?.trim() || '',
+          liveUrl: project.liveUrl?.trim() || '',
+          repositoryUrl: project.repositoryUrl?.trim() || '',
+        })),
+        certifications: certificationsToSave.map((item) => ({
+          ...(item._id ? { id: item._id } : {}),
+          kind: item.kind,
+          title: item.title.trim(),
+          issuer: item.issuer?.trim() || '',
+          issueDate: item.issueDate || '',
+          description: item.description?.trim() || '',
+          credentialUrl: item.credentialUrl?.trim() || '',
+        })),
+        codingProfiles: codingPlatforms.flatMap(({ key }) => {
+          const username = codingUsernames[key].trim()
+          return username ? [{ platform: key, username }] : []
+        }),
         openToOpportunities: form.get('openToOpportunities') === 'on',
       } })
+      setLeetcodeStats(savedProfile.leetcodeStats)
+      setLeetcodeStatsUsername(savedProfile.codingProfiles?.find((item) => item.platform === 'leetcode')?.username || '')
+      setHackerrankStats(savedProfile.hackerrankStats)
+      setHackerrankStatsUsername(savedProfile.codingProfiles?.find((item) => item.platform === 'hackerrank')?.username || '')
+      const savedCertifications = (savedProfile.certifications || []).map((item, index) => ({
+        ...item,
+        clientKey: certificationsToSave[index]?.clientKey || String(item._id),
+      }))
+      const failedUploads = []
+      for (const [index, item] of certificationsToSave.entries()) {
+        const file = certificationFiles[item.clientKey]
+        if (!file) continue
+        const body = new FormData()
+        body.set('file', file)
+        try {
+          const { certification: uploaded } = await api(`/candidate/profile/certifications/${savedCertifications[index]._id}/file`, { method: 'POST', body })
+          savedCertifications[index] = { ...savedCertifications[index], ...uploaded }
+          setCertificationFiles((current) => {
+            const next = { ...current }
+            delete next[item.clientKey]
+            return next
+          })
+        } catch (uploadError) {
+          failedUploads.push(`${item.title}: ${uploadError.message}`)
+        }
+      }
+      setCertifications(savedCertifications)
       await onProfileSaved()
+      if (failedUploads.length) {
+        setError(`Profile saved, but these files could not be uploaded. Select them again and save: ${failedUploads.join('; ')}`)
+      }
     } catch (saveError) {
       setError(saveError.message)
     } finally {
       setBusy(false)
     }
   }
+
+  function handleProfileTabKeyDown(event) {
+    const currentIndex = profileTabs.findIndex((tab) => tab.key === activeProfileTab)
+    let nextIndex = currentIndex
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % profileTabs.length
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + profileTabs.length) % profileTabs.length
+    else if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = profileTabs.length - 1
+    else return
+    event.preventDefault()
+    setActiveProfileTab(profileTabs[nextIndex].key)
+    event.currentTarget.querySelector(`[data-profile-tab-button="${profileTabs[nextIndex].key}"]`)?.focus()
+  }
+
+  async function uploadProfileImage(asset, file) {
+    setImageBusy((current) => ({ ...current, [asset]: true }))
+    setImageError('')
+    try {
+      const body = new FormData()
+      body.set('image', file)
+      await api(`/candidate/profile/${asset}`, { method: 'POST', body })
+      await onSaved()
+      return true
+    } catch (uploadError) {
+      setImageError(uploadError.message)
+      return false
+    } finally {
+      setImageBusy((current) => ({ ...current, [asset]: false }))
+    }
+  }
+
+  function selectProfilePhoto(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) void uploadProfileImage('photo', file)
+  }
+
+  function selectProfileBanner(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setImageError('Choose a JPG, PNG, or WebP banner image.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('Banner images must be 5 MB or smaller.')
+      return
+    }
+    setImageError('')
+    setBannerCropFile({ file, url: URL.createObjectURL(file) })
+  }
+
+  async function saveProfileBanner(file) {
+    const saved = await uploadProfileImage('banner', file)
+    if (!saved) throw new Error('Banner upload failed. Review the error on your profile and try again.')
+  }
+
+  const refreshLeetCodeStats = useCallback(async (username = codingUsernames.leetcode.trim()) => {
+    if (!username) return
+    setStatsBusy(true)
+    setStatsError('')
+    try {
+      const { stats } = await api('/candidate/profile/coding-stats/refresh', {
+        method: 'POST',
+        body: { username },
+      })
+      setLeetcodeStats(stats)
+      setLeetcodeStatsUsername(username)
+    } catch (refreshError) {
+      setStatsError(refreshError.message)
+    } finally {
+      setStatsBusy(false)
+    }
+  }, [codingUsernames.leetcode])
+
+  const refreshHackerRankStats = useCallback(async (username = codingUsernames.hackerrank.trim()) => {
+    if (!username) return
+    setHackerrankStatsBusy(true)
+    setHackerrankStatsError('')
+    try {
+      const { stats } = await api('/candidate/profile/hackerrank-stats/refresh', {
+        method: 'POST',
+        body: { username },
+      })
+      setHackerrankStats(stats)
+      setHackerrankStatsUsername(username)
+    } catch (refreshError) {
+      setHackerrankStatsError(refreshError.message)
+    } finally {
+      setHackerrankStatsBusy(false)
+    }
+  }, [codingUsernames.hackerrank])
+
+  useEffect(() => {
+    const username = profile?.codingProfiles?.find((item) => item.platform === 'leetcode')?.username?.trim()
+    if (!username) return
+    const key = `leetcode:${username.toLowerCase()}`
+    if (autoRefreshAttempted.current.has(key)) return
+    autoRefreshAttempted.current.add(key)
+    void refreshLeetCodeStats(username)
+  }, [profile?.codingProfiles, profile?.leetcodeStats?.updatedAt, refreshLeetCodeStats])
+
+  useEffect(() => {
+    const username = profile?.codingProfiles?.find((item) => item.platform === 'hackerrank')?.username?.trim()
+    if (!username) return
+    const key = `hackerrank:${username.toLowerCase()}`
+    if (autoRefreshAttempted.current.has(key)) return
+    autoRefreshAttempted.current.add(key)
+    void refreshHackerRankStats(username)
+  }, [profile?.codingProfiles, profile?.hackerrankStats?.updatedAt, refreshHackerRankStats])
 
   async function uploadResume(event) {
     const file = event.target.files?.[0]
@@ -436,21 +1046,174 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
   return (
     <section className={`module-section candidate-profile ${largeText ? 'candidate-profile-large-text' : ''}`}>
       <div className="module-heading"><div>{showHeading && <h2>Your profile</h2>}<p>Keep your experience current so opportunities can find you.</p></div></div>
-      <form className="module-form" onSubmit={saveProfile}>
-        <label>Full name<input name="name" defaultValue={profile?.name} required maxLength={120} /></label>
-        <label>Professional headline<input name="title" defaultValue={profile?.title} maxLength={120} /></label>
-        <div className="form-two-col"><label>Phone<input name="phone" defaultValue={profile?.phone} maxLength={40} /></label><label>Location<input name="location" defaultValue={profile?.location} maxLength={120} /></label></div>
-        <label>Skills<input name="skills" defaultValue={profile?.skills?.join(', ')} placeholder="Figma, Research, Prototyping" /></label>
-        <label>Preferred locations<input name="preferredLocations" defaultValue={profile?.preferredLocations?.join(', ')} /></label>
-        <label className="checkbox-field">
-          <input type="checkbox" name="openToOpportunities" defaultChecked={profile?.openToOpportunities} />
-          <span><strong>Open to opportunities</strong><small>Allow verified organizations to discover your profile and contact you about relevant roles.</small></span>
-        </label>
+      <form className="module-form" onSubmit={saveProfile} noValidate>
+        <div className="candidate-profile-tabs" role="tablist" aria-label="Profile sections" onKeyDown={handleProfileTabKeyDown}>
+          {profileTabs.map((tab) => <button
+            type="button"
+            className="candidate-profile-tab"
+            id={`candidate-profile-tab-${tab.key}`}
+            role="tab"
+            aria-selected={activeProfileTab === tab.key}
+            aria-controls={`candidate-profile-panel-${tab.key}`}
+            tabIndex={activeProfileTab === tab.key ? 0 : -1}
+            data-profile-tab-button={tab.key}
+            key={tab.key}
+            onClick={() => setActiveProfileTab(tab.key)}
+          >{tab.label}</button>)}
+        </div>
+        <section
+          className="candidate-profile-group candidate-profile-general"
+          id="candidate-profile-panel-basic"
+          role="tabpanel"
+          aria-labelledby="candidate-profile-tab-basic"
+          data-profile-tab="basic"
+          hidden={activeProfileTab !== 'basic'}
+        >
+          <div className="candidate-profile-section-heading"><div><strong id="candidate-general-heading">General information</strong><small>Your profile photo, banner, and professional details.</small></div><UserRound size={18} aria-hidden="true" /></div>
+          <div className="candidate-profile-visual">
+            <div className="candidate-profile-banner">
+              {profile?.profileBannerKey
+                ? <img src={`/api/candidate/profile/assets/banner?v=${encodeURIComponent(profile.profileBannerKey)}`} alt="Profile banner" />
+                : <span>Add a banner to personalize your profile</span>}
+              <label className="candidate-image-upload">{imageBusy.banner ? 'Uploading…' : <><ImagePlus size={14} /> {profile?.profileBannerKey ? 'Change banner' : 'Upload banner'}</>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectProfileBanner} disabled={imageBusy.banner} /></label>
+            </div>
+            <div className="candidate-profile-photo-row">
+              <UserAvatar name={profile?.name} picture={profile?.profilePhotoKey ? `/api/candidate/profile/assets/photo?v=${encodeURIComponent(profile.profilePhotoKey)}` : profile?.picture} />
+              <div><strong>Profile photo</strong><small>JPG, PNG, or WebP · Maximum 5 MB</small></div>
+              <label className="subtle-button file-upload-button">{imageBusy.photo ? 'Uploading…' : 'Upload photo'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectProfilePhoto} disabled={imageBusy.photo} /></label>
+            </div>
+          </div>
+          {imageError && <p className="auth-error" role="alert">{imageError}</p>}
+          <label>Full name<input name="name" defaultValue={profile?.name} required maxLength={120} /></label>
+          <label>Professional headline<input name="title" defaultValue={profile?.title} maxLength={120} /></label>
+          <div className="form-two-col"><label>Phone<input name="phone" defaultValue={profile?.phone} maxLength={40} /></label><label>Location<input name="location" defaultValue={profile?.location} maxLength={120} /></label></div>
+          <label>About<textarea name="about" defaultValue={profile?.about} rows="5" maxLength={3000} placeholder="Share your background, strengths, and the kind of work you enjoy." /></label>
+          <label>Skills<input name="skills" defaultValue={profile?.skills?.join(', ')} placeholder="Figma, Research, Prototyping" /></label>
+          <label>Preferred locations<input name="preferredLocations" defaultValue={profile?.preferredLocations?.join(', ')} /></label>
+          <label className="checkbox-field">
+            <input type="checkbox" name="openToOpportunities" defaultChecked={profile?.openToOpportunities} />
+            <span><strong>Open to opportunities</strong><small>Allow verified organizations to discover your profile and contact you about relevant roles.</small></span>
+          </label>
+        </section>
+        <section
+          className="candidate-profile-group candidate-coding-profiles"
+          id="candidate-profile-panel-coding"
+          role="tabpanel"
+          aria-labelledby="candidate-profile-tab-coding"
+          data-profile-tab="coding"
+          hidden={activeProfileTab !== 'coding'}
+        >
+          <div className="candidate-profile-section-heading"><div><strong id="candidate-coding-heading">Coding information</strong><small>LeetCode and HackerRank dashboards refresh when you open this profile; other platform links open their public profiles.</small></div><Code2 size={18} aria-hidden="true" /></div>
+          {codingPlatforms.map(({ key, label }) => {
+            const username = codingUsernames[key]
+            return <div className="candidate-coding-profile-field" key={key}>
+              <label>{label} username<input name={`coding-${key}`} value={username} maxLength={50} pattern="[\w.-]+" placeholder={`${label} username`} onChange={(event) => setCodingUsernames((current) => ({ ...current, [key]: event.target.value }))} /></label>
+              {username.trim() && <a href={codingProfileUrl(key, username.trim())} target="_blank" rel="noreferrer">View {label} profile <ExternalLink size={13} /></a>}
+            </div>
+          })}
+          {codingUsernames.leetcode.trim() && <LeetCodeDashboard
+            username={codingUsernames.leetcode.trim()}
+            stats={leetcodeStatsUsername.toLowerCase() === codingUsernames.leetcode.trim().toLowerCase() ? leetcodeStats : undefined}
+            onRefresh={() => refreshLeetCodeStats()}
+            refreshing={statsBusy}
+            error={statsError}
+          />}
+          {codingUsernames.hackerrank.trim() && <HackerRankDashboard
+            username={codingUsernames.hackerrank.trim()}
+            stats={hackerrankStatsUsername.toLowerCase() === codingUsernames.hackerrank.trim().toLowerCase() ? hackerrankStats : undefined}
+            onRefresh={() => refreshHackerRankStats()}
+            refreshing={hackerrankStatsBusy}
+            error={hackerrankStatsError}
+          />}
+        </section>
+        <div
+          className="candidate-profile-tab-panel"
+          id="candidate-profile-panel-projects"
+          role="tabpanel"
+          aria-labelledby="candidate-profile-tab-projects"
+          data-profile-tab="projects"
+          hidden={activeProfileTab !== 'projects'}
+        >
+          <section className="candidate-profile-group candidate-profile-projects" aria-labelledby="candidate-projects-heading">
+            <div className="candidate-profile-section-heading"><div><strong id="candidate-projects-heading">Projects</strong><small>Add up to 5 projects to highlight your work.</small></div><button type="button" className="subtle-button" onClick={() => setProjects((current) => current.length < 5 ? [...current, { title: '', description: '', liveUrl: '', repositoryUrl: '' }] : current)} disabled={projects.length >= 5}><Plus size={14} /> Add project</button></div>
+            {projects.map((project, index) => <fieldset className="candidate-project-editor" key={index}>
+              <legend>Project {index + 1}</legend>
+              <button type="button" className="candidate-project-remove" aria-label={`Remove project ${index + 1}`} onClick={() => setProjects((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={14} /></button>
+              <label>Project name<input value={project.title || ''} required maxLength={120} onChange={(event) => setProjects((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item))} /></label>
+              <label>Description<textarea value={project.description || ''} rows="2" maxLength={1000} onChange={(event) => setProjects((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))} /></label>
+            </fieldset>)}
+          </section>
+          <section className="candidate-profile-group candidate-profile-links" aria-labelledby="candidate-links-heading">
+            <div className="candidate-profile-section-heading"><div><strong id="candidate-links-heading">Links</strong><small>Share your portfolio, project demos, and source repositories.</small></div><ExternalLink size={18} aria-hidden="true" /></div>
+            <label>Portfolio website<input name="portfolioUrl" type="url" defaultValue={profile?.portfolioUrl} maxLength={500} placeholder="https://your-portfolio.example" /></label>
+            {projects.length > 0
+              ? projects.map((project, index) => <div className="candidate-project-links-editor" key={index}>
+                <strong>{project.title?.trim() || `Project ${index + 1}`}</strong>
+                <div className="form-two-col">
+                  <label>Live URL<input type="url" value={project.liveUrl || ''} maxLength={500} placeholder="https://…" onChange={(event) => setProjects((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, liveUrl: event.target.value } : item))} /></label>
+                  <label>Git repository URL<input type="url" value={project.repositoryUrl || ''} maxLength={500} placeholder="https://github.com/…" onChange={(event) => setProjects((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, repositoryUrl: event.target.value } : item))} /></label>
+                </div>
+              </div>)
+              : <p className="candidate-profile-empty-links">Add a project to include its live and repository links.</p>}
+          </section>
+        </div>
+        <div
+          className="candidate-profile-tab-panel"
+          id="candidate-profile-panel-certifications"
+          role="tabpanel"
+          aria-labelledby="candidate-profile-tab-certifications"
+          data-profile-tab="certifications"
+          hidden={activeProfileTab !== 'certifications'}
+        >
+          <section className="candidate-profile-group candidate-profile-certifications" aria-labelledby="candidate-certifications-heading">
+            <div className="candidate-profile-section-heading">
+              <div><strong id="candidate-certifications-heading">Certifications and achievements</strong><small>Add up to 20 items. Upload a certificate file or share a credential link.</small></div>
+              <button type="button" className="subtle-button" onClick={() => setCertifications((current) => current.length < 20 ? [...current, { clientKey: `new-${Date.now()}-${Math.random()}`, kind: 'certificate', title: '', issuer: '', issueDate: '', description: '', credentialUrl: '' }] : current)} disabled={certifications.length >= 20}><Plus size={14} /> Add item</button>
+            </div>
+            {certifications.length === 0 && <p className="candidate-profile-empty-links">No certifications or achievements added yet.</p>}
+            {certifications.map((item, index) => <fieldset className="candidate-certification-editor" key={item.clientKey}>
+              <legend>{item.kind === 'certificate' ? 'Certificate' : 'Achievement'} {index + 1}</legend>
+              <button
+                type="button"
+                className="candidate-project-remove"
+                aria-label={`Remove ${item.kind === 'certificate' ? 'certificate' : 'achievement'} ${index + 1}`}
+                onClick={() => {
+                  setCertifications((current) => current.filter((entry) => entry.clientKey !== item.clientKey))
+                  setCertificationFiles((current) => {
+                    const next = { ...current }
+                    delete next[item.clientKey]
+                    return next
+                  })
+                }}
+              ><Trash2 size={14} /></button>
+              <div className="form-two-col">
+                <label>Item type<select value={item.kind} onChange={(event) => setCertifications((current) => current.map((entry) => entry.clientKey === item.clientKey ? { ...entry, kind: event.target.value } : entry))}><option value="certificate">Certificate</option><option value="achievement">Achievement</option></select></label>
+                <label>Title<input value={item.title || ''} required maxLength={120} onChange={(event) => setCertifications((current) => current.map((entry) => entry.clientKey === item.clientKey ? { ...entry, title: event.target.value } : entry))} /></label>
+              </div>
+              <div className="form-two-col">
+                <label>Issuer / organization<input value={item.issuer || ''} maxLength={160} onChange={(event) => setCertifications((current) => current.map((entry) => entry.clientKey === item.clientKey ? { ...entry, issuer: event.target.value } : entry))} /></label>
+                <label>Issue date<input type="date" value={item.issueDate || ''} onChange={(event) => setCertifications((current) => current.map((entry) => entry.clientKey === item.clientKey ? { ...entry, issueDate: event.target.value } : entry))} /></label>
+              </div>
+              <label>Description<textarea value={item.description || ''} rows="2" maxLength={1000} onChange={(event) => setCertifications((current) => current.map((entry) => entry.clientKey === item.clientKey ? { ...entry, description: event.target.value } : entry))} /></label>
+              <label>Credential URL<input type="url" value={item.credentialUrl || ''} maxLength={500} placeholder="https://…" onChange={(event) => setCertifications((current) => current.map((entry) => entry.clientKey === item.clientKey ? { ...entry, credentialUrl: event.target.value } : entry))} /></label>
+              <div className="candidate-certification-file-row">
+                <label className="subtle-button file-upload-button">{certificationFiles[item.clientKey] ? 'Change selected file' : item.fileName ? 'Replace uploaded file' : 'Upload certificate'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) setCertificationFiles((current) => ({ ...current, [item.clientKey]: file }))
+                  event.target.value = ''
+                }} /></label>
+                <span>{certificationFiles[item.clientKey]?.name || item.fileName || 'PDF, JPG, PNG, or WebP · Maximum 5 MB'}</span>
+                {item.fileKey && <a href={`/api/candidate/profile/certifications/${item._id}/file`} target="_blank" rel="noreferrer">View uploaded file <ExternalLink size={13} /></a>}
+              </div>
+            </fieldset>)}
+          </section>
+        </div>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button type="submit" className="green-button" disabled={busy}>{busy ? 'Saving…' : 'Save profile'} <ArrowRight size={14} /></button>
       </form>
       <div className="resume-manager"><div><h3>Resume</h3><p>Private PDF or DOCX · Maximum 5 MB</p></div>{profile?.resumeKey && <button type="button" className="subtle-button" onClick={openResume}><ArrowDownToLine size={14} /> Open resume</button>}<label className="subtle-button file-upload-button">{resumeBusy ? 'Uploading…' : 'Upload new resume'}<input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={uploadResume} disabled={resumeBusy} /></label></div>
       {resumeError && <p className="auth-error" role="alert">{resumeError}</p>}
+      {bannerCropFile && <BannerCropModal sourceUrl={bannerCropFile.url} onClose={() => setBannerCropFile(null)} onSave={saveProfileBanner} />}
     </section>
   )
 }
@@ -840,7 +1603,8 @@ function DashboardWorkspace({ role }) {
   const loadSequence = useRef(0)
   const [today] = useState(() => new Date())
   const navItems = navigation[role]
-  const activePage = navItems.find(([label]) => slug(label) === section)?.[0] || 'Overview'
+  const activePage = navItems.find(([label]) => slug(label) === section)?.[0]
+    || (role === 'candidate' && section === 'settings' ? 'Settings' : 'Overview')
   const title = activePage === 'Overview'
     ? role === 'candidate' ? `Welcome back, ${user.name.split(' ')[0]}.` : role === 'recruiter' ? `Welcome back, ${user.name.split(' ')[0]}.` : 'Your platform, at a glance.'
     : activePage
@@ -1153,11 +1917,24 @@ function DashboardWorkspace({ role }) {
       resource: candidate,
     }))} actions={(row) => <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.id, true)}>View profile</button>} empty="No candidates are currently open to opportunities." />
   } else if (isRecruiter && activePage === 'Interviews') {
-    table = <DataTable columns={['Candidate', 'Job', 'Date', 'Duration', 'Meeting']} rows={(viewData?.items || []).map((item) => ({
+    table = <DataTable columns={['Candidate', 'Job', 'Date', 'Duration', 'Meeting', 'Status']} rows={(viewData?.items || []).map((item) => ({
       id: item._id,
-      cells: [item.candidate?.name, item.application?.job?.title, new Date(item.scheduledAt).toLocaleString(undefined, { timeZone: organizationTimeZone || 'UTC', timeZoneName: 'short' }), `${item.durationMinutes} minutes`, item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : '—'],
+      cells: [
+        item.candidate?.name,
+        item.application?.job?.title,
+        new Date(item.scheduledAt).toLocaleString(undefined, { timeZone: organizationTimeZone || 'UTC', timeZoneName: 'short' }),
+        `${item.durationMinutes} minutes`,
+        item.meetingUrl ? <a key="meeting" className="meeting-link" href={item.meetingUrl} target="_blank" rel="noreferrer">Join meeting</a> : '—',
+        isInterviewCompleted(item) ? 'Completed' : item.status === 'cancelled' ? 'Cancelled' : 'Scheduled',
+      ],
       resource: item,
-    }))} empty="Scheduled interviews will appear here." />
+    }))} actions={(row) => isInterviewCompleted(row.resource)
+      ? <button type="button" className="org-action-button org-remove-button" onClick={() => {
+        if (window.confirm(`Permanently delete the completed interview with ${row.resource.candidate?.name || 'this candidate'}?`)) {
+          void mutate(() => api(`/recruiter/interviews/${row.id}`, { method: 'DELETE' }))
+        }
+      }}>Delete</button>
+      : '—'} empty="Scheduled interviews will appear here." />
   } else if (isAdmin && activePage === 'Organization Management' || isAdmin && activePage === 'Verification Requests') {
     const organizations = viewData?.items || []
     table = <DataTable columns={['Organization', 'Contact', 'Status', 'Joined']} rows={organizations.map((company) => ({
@@ -1230,7 +2007,7 @@ function DashboardWorkspace({ role }) {
             { label: 'Logout', icon: <LogOut size={16} />, onClick: async () => { await signOut(); navigate('/login', { replace: true }) } },
           ]}
         /> : <><UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></>}</div></header>
-        <div className="dashboard-content">
+        <div className={`dashboard-content ${role === 'candidate' && activePage === 'My Profile' ? 'dashboard-profile-content' : ''}`}>
           <div className="dashboard-welcome"><div><div className="date-line">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div><h1>{title}</h1><p>{isAdmin ? 'Manage people, organizations, and the standards that make this marketplace trusted.' : isRecruiter ? `Your organization is ${payload?.company?.status || 'loading'} · see what needs your attention today.` : 'A thoughtful next step can bring the right opportunity closer.'}</p></div>
             {isCandidate && <button className="green-button" type="button" onClick={() => goTo('My Profile')}>Complete profile <ArrowRight size={14} /></button>}
             {isRecruiter && <button className="green-button" type="button" onClick={() => goTo('Post a Job')}>Post a job <ArrowRight size={14} /></button>}

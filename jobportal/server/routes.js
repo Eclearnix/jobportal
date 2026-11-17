@@ -54,6 +54,75 @@ const upload = multer({
     return callback(null, true)
   },
 })
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter(_req, file, callback) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      const error = new Error('Choose a JPG, PNG, or WebP image.')
+      error.status = 400
+      return callback(error)
+    }
+    return callback(null, true)
+  },
+})
+const certificateUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter(_req, file, callback) {
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      const error = new Error('Choose a PDF, JPG, PNG, or WebP certificate.')
+      error.status = 400
+      return callback(error)
+    }
+    return callback(null, true)
+  },
+})
+const publicUrl = z.string().trim().max(500).refine((value) => {
+  if (!value) return true
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}, 'Enter a valid HTTP or HTTPS URL.')
+
+function emptyLeetCodeStats() {
+  return {
+    solved: null,
+    solvedEasy: 0,
+    solvedMedium: 0,
+    solvedHard: 0,
+    totalQuestions: 0,
+    totalEasy: 0,
+    totalMedium: 0,
+    totalHard: 0,
+    submissionsPastYear: 0,
+    activeDays: 0,
+    maxStreak: 0,
+    activity: [],
+    badgeCount: 0,
+    activeBadge: { name: '', icon: '' },
+    badges: [],
+    ranking: null,
+    contestRating: null,
+    globalRanking: null,
+    updatedAt: null,
+  }
+}
+
+function emptyHackerRankStats() {
+  return {
+    challengesSolved: 0,
+    totalPracticePoints: 0,
+    totalContestPoints: 0,
+    trackCount: 0,
+    badgeCount: 0,
+    badges: [],
+    tracks: [],
+    updatedAt: null,
+  }
+}
 
 function getRecruiterNotificationsUrl(req) {
   const origin = req.get('origin') || process.env.CLIENT_ORIGIN?.split(',')[0]
@@ -236,6 +305,309 @@ function validateFileSignature(file) {
     const error = new Error('The uploaded file content does not match an allowed resume format.')
     error.status = 400
     throw error
+  }
+}
+
+function validateImageSignature(file) {
+  if (!file) return
+  const isJpeg = file.mimetype === 'image/jpeg'
+    && file.buffer[0] === 0xff && file.buffer[1] === 0xd8 && file.buffer[2] === 0xff
+  const isPng = file.mimetype === 'image/png'
+    && file.buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  const isWebp = file.mimetype === 'image/webp'
+    && file.buffer.toString('ascii', 0, 4) === 'RIFF'
+    && file.buffer.toString('ascii', 8, 12) === 'WEBP'
+  if (!isJpeg && !isPng && !isWebp) {
+    const error = new Error('The uploaded file content does not match an allowed image format.')
+    error.status = 400
+    throw error
+  }
+}
+
+function validateCertificateSignature(file) {
+  if (file.mimetype !== 'application/pdf') return validateImageSignature(file)
+  if (file.buffer.subarray(0, 5).toString() !== '%PDF-') {
+    const error = new Error('The uploaded file content does not match a PDF certificate.')
+    error.status = 400
+    throw error
+  }
+}
+
+async function fetchLeetCodeStats(username) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+  let payload
+  try {
+    const response = await fetch('https://leetcode.com/graphql/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'EclearnixJobs/1.0' },
+      body: JSON.stringify({
+        query: `query profileStats($username: String!) {
+          allQuestionsCount { difficulty count }
+          matchedUser(username: $username) {
+            profile { ranking }
+            activeBadge { displayName icon }
+            badges { id displayName icon creationDate }
+            submitStats {
+              acSubmissionNum { difficulty count }
+              totalSubmissionNum { difficulty count }
+            }
+            userCalendar { streak totalActiveDays activeYears submissionCalendar }
+          }
+          userContestRanking(username: $username) {
+            rating
+            globalRanking
+          }
+        }`,
+        variables: { username },
+      }),
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const error = new Error('LeetCode stats are temporarily unavailable.')
+      error.status = 502
+      throw error
+    }
+    try {
+      payload = await response.json()
+    } catch {
+      const error = new Error('LeetCode returned an invalid stats response.')
+      error.status = 502
+      throw error
+    }
+  } catch (requestError) {
+    if (requestError.status) throw requestError
+    const error = new Error('LeetCode stats could not be reached. Try again later.')
+    error.status = 502
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+  const matchedUser = payload.data?.matchedUser
+  if (!matchedUser) {
+    const error = new Error(payload.errors?.length
+      ? 'LeetCode could not provide stats for this profile.'
+      : 'That LeetCode profile could not be found.')
+    error.status = payload.errors?.length ? 502 : 404
+    throw error
+  }
+  const acceptedSubmissions = matchedUser.submitStats?.acSubmissionNum
+  const questionTotals = payload.data?.allQuestionsCount
+  const toCounts = (rows) => {
+    if (!Array.isArray(rows)) return null
+    const counts = {}
+    for (const item of rows) {
+      if (typeof item?.difficulty !== 'string' || !Number.isSafeInteger(item.count) || item.count < 0) return null
+      counts[item.difficulty.toLowerCase()] = item.count
+    }
+    return counts
+  }
+  const solvedCounts = toCounts(acceptedSubmissions)
+  const totalCounts = toCounts(questionTotals)
+  if (!solvedCounts || !totalCounts || !['all', 'easy', 'medium', 'hard'].every((key) => (
+    Number.isSafeInteger(solvedCounts[key]) && Number.isSafeInteger(totalCounts[key])
+  ))) {
+    const error = new Error('LeetCode returned incomplete stats. Try again later.')
+    error.status = 502
+    throw error
+  }
+
+  const calendar = matchedUser.userCalendar
+  let rawCalendar = calendar?.submissionCalendar
+  if (typeof rawCalendar === 'string') {
+    try {
+      rawCalendar = JSON.parse(rawCalendar)
+    } catch {
+      const error = new Error('LeetCode returned an invalid activity calendar.')
+      error.status = 502
+      throw error
+    }
+  }
+  if (!rawCalendar || typeof rawCalendar !== 'object' || Array.isArray(rawCalendar)) rawCalendar = {}
+  const activityByDate = new Map()
+  for (const [timestamp, value] of Object.entries(rawCalendar)) {
+    const date = new Date(Number(timestamp) * 1000)
+    const count = Number(value)
+    if (!Number.isFinite(date.getTime()) || !Number.isSafeInteger(count) || count < 0) {
+      const error = new Error('LeetCode returned invalid activity data.')
+      error.status = 502
+      throw error
+    }
+    activityByDate.set(date.toISOString().slice(0, 10), count)
+  }
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  const startDate = new Date(today.getTime() - 364 * 24 * 60 * 60 * 1000)
+  const recentActivity = [...activityByDate.entries()]
+    .filter(([date]) => date >= startDate.toISOString().slice(0, 10) && date <= today.toISOString().slice(0, 10))
+    .map(([date, count]) => ({ date, count }))
+    .sort((left, right) => left.date.localeCompare(right.date))
+  const submissionsPastYear = recentActivity.reduce((sum, day) => sum + day.count, 0)
+  const activeDays = recentActivity.filter((day) => day.count > 0).length
+  let maxStreak = 0
+  let currentStreak = 0
+  let previousDate = null
+  for (const day of recentActivity) {
+    const date = new Date(`${day.date}T00:00:00.000Z`)
+    const consecutive = previousDate && date.getTime() - previousDate.getTime() === 24 * 60 * 60 * 1000
+    currentStreak = day.count > 0 ? consecutive ? currentStreak + 1 : 1 : 0
+    maxStreak = Math.max(maxStreak, currentStreak)
+    previousDate = day.count > 0 ? date : null
+  }
+  const safeBadgeIcon = (icon) => {
+    if (typeof icon !== 'string' || !icon) return ''
+    try {
+      const url = new URL(icon, 'https://leetcode.com')
+      return url.protocol === 'https:' && (url.hostname === 'leetcode.com' || url.hostname.endsWith('.leetcode.com'))
+        ? url.href
+        : ''
+    } catch {
+      return ''
+    }
+  }
+  const badges = Array.isArray(matchedUser.badges)
+    ? matchedUser.badges
+      .map((badge) => ({
+        name: badge.displayName,
+        icon: safeBadgeIcon(badge.icon),
+        earnedAt: badge.creationDate || '',
+      }))
+      .filter((badge) => badge.name)
+      .sort((left, right) => String(right.earnedAt).localeCompare(String(left.earnedAt)))
+      .slice(0, 6)
+    : []
+  const activeBadge = matchedUser.activeBadge
+  const contest = payload.data?.userContestRanking
+  return {
+    solved: solvedCounts.all,
+    solvedEasy: solvedCounts.easy,
+    solvedMedium: solvedCounts.medium,
+    solvedHard: solvedCounts.hard,
+    totalQuestions: totalCounts.all,
+    totalEasy: totalCounts.easy,
+    totalMedium: totalCounts.medium,
+    totalHard: totalCounts.hard,
+    submissionsPastYear,
+    activeDays,
+    maxStreak,
+    activity: recentActivity,
+    badgeCount: Array.isArray(matchedUser.badges) ? matchedUser.badges.length : 0,
+    activeBadge: activeBadge ? { name: activeBadge.displayName, icon: safeBadgeIcon(activeBadge.icon) } : { name: '', icon: '' },
+    badges,
+    ranking: Number.isFinite(matchedUser.profile?.ranking) ? matchedUser.profile.ranking : null,
+    contestRating: Number.isFinite(contest?.rating) ? contest.rating : null,
+    globalRanking: Number.isFinite(contest?.globalRanking) ? contest.globalRanking : null,
+  }
+}
+
+async function fetchHackerRankStats(username) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+  const baseUrl = 'https://www.hackerrank.com/rest'
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36',
+  }
+  const requestJson = async (path) => {
+    const response = await fetch(`${baseUrl}/${path}`, { headers, signal: controller.signal })
+    if (!response.ok) {
+      const error = new Error(response.status === 429
+        ? 'HackerRank is rate-limiting profile requests. Try again later.'
+        : response.status === 404
+          ? 'That HackerRank profile could not be found.'
+          : 'HackerRank stats are temporarily unavailable.')
+      error.status = response.status === 404 ? 404 : 502
+      throw error
+    }
+    try {
+      return await response.json()
+    } catch {
+      const error = new Error('HackerRank returned an invalid stats response.')
+      error.status = 502
+      throw error
+    }
+  }
+
+  let profilePayload
+  let badgePayload
+  let scoreRows
+  const encodedUsername = encodeURIComponent(username)
+  try {
+    [profilePayload, badgePayload, scoreRows] = await Promise.all([
+      requestJson(`contests/master/hackers/${encodedUsername}/profile`),
+      requestJson(`hackers/${encodedUsername}/badges`),
+      requestJson(`hackers/${encodedUsername}/scores_elo`),
+    ])
+  } catch (requestError) {
+    if (requestError.status) throw requestError
+    const error = new Error(controller.signal.aborted
+      ? 'HackerRank stats request timed out. Try again later.'
+      : 'HackerRank stats could not be reached. Try again later.')
+    error.status = 502
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+
+  if (!profilePayload?.model?.username) {
+    const error = new Error('That HackerRank profile could not be found.')
+    error.status = 404
+    throw error
+  }
+  if (!Array.isArray(badgePayload?.models) || !Array.isArray(scoreRows)) {
+    const error = new Error('HackerRank returned incomplete stats. Try again later.')
+    error.status = 502
+    throw error
+  }
+
+  const metric = (value) => {
+    const number = Number(value)
+    return Number.isFinite(number) && number >= 0 ? number : 0
+  }
+  const rank = (value) => {
+    const number = Number(value)
+    return Number.isSafeInteger(number) && number > 0 ? number : null
+  }
+  const badgeRows = badgePayload.models.map((badge) => ({
+    name: typeof badge?.badge_name === 'string' ? badge.badge_name.trim() : '',
+    badgeType: typeof badge?.badge_type === 'string' ? badge.badge_type : '',
+    stars: metric(badge?.stars),
+    solved: metric(badge?.solved),
+    points: metric(badge?.current_points ?? badge?.points),
+  })).filter((badge) => badge.name)
+  const earnedBadges = badgeRows.filter((badge) => badge.stars > 0)
+    .sort((left, right) => right.stars - left.stars || right.points - left.points)
+  const tracks = scoreRows.map((row) => {
+    const practiceScore = metric(row?.practice?.score)
+    const contestScore = metric(row?.contest?.score)
+    const medals = row?.contest?.medals || {}
+    return {
+      name: typeof row?.name === 'string' ? row.name : '',
+      slug: typeof row?.slug === 'string' ? row.slug : '',
+      practiceScore,
+      practiceRank: rank(row?.practice?.rank),
+      contestScore,
+      contestRank: rank(row?.contest?.rank),
+      level: contestScore > 0 ? metric(row?.contest?.level) : null,
+      goldMedals: metric(medals.gold),
+      silverMedals: metric(medals.silver),
+      bronzeMedals: metric(medals.bronze),
+    }
+  }).filter((track) => track.name && (
+    track.practiceScore > 0 || track.contestScore > 0
+      || track.goldMedals > 0 || track.silverMedals > 0 || track.bronzeMedals > 0
+  )).sort((left, right) => (
+    right.practiceScore + right.contestScore - left.practiceScore - left.contestScore
+  ))
+
+  return {
+    challengesSolved: badgeRows.reduce((total, badge) => total + badge.solved, 0),
+    totalPracticePoints: tracks.reduce((total, track) => total + track.practiceScore, 0),
+    totalContestPoints: tracks.reduce((total, track) => total + track.contestScore, 0),
+    trackCount: tracks.length,
+    badgeCount: earnedBadges.length,
+    badges: earnedBadges.slice(0, 12),
+    tracks: tracks.slice(0, 12),
   }
 }
 
@@ -455,7 +827,7 @@ router.get('/dashboard/candidate', requireUser, requireRoles('candidate'), async
   const [applicationsSent, interviews, profile, recentApplications, recommendedJobs, unreadNotifications] = await Promise.all([
     Application.countDocuments({ candidate: req.user._id, status: { $ne: 'withdrawn' } }),
     Interview.countDocuments({ candidate: req.user._id, status: 'scheduled', scheduledAt: { $gte: new Date() } }),
-    User.findById(req.user._id).select('name title location skills education experience resumeKey phone preferredLocations openToOpportunities profileViews candidateNotificationPreferences'),
+    User.findById(req.user._id).select('name picture title about profilePhotoKey profileBannerKey location skills education experience portfolioUrl projects certifications codingProfiles leetcodeStats hackerrankStats resumeKey phone preferredLocations openToOpportunities profileViews candidateNotificationPreferences'),
     Application.find({ candidate: req.user._id }).sort({ createdAt: -1 }).limit(5).populate({ path: 'job', select: 'title location employmentType' }).populate({ path: 'company', select: 'name' }).lean(),
     Job.find({ status: 'published', ...(req.user.skills?.length ? { skills: { $in: req.user.skills } } : {}) }).sort({ publishedAt: -1 }).limit(4).populate('company', 'name location').lean(),
     Notification.countDocuments({ user: req.user._id, readAt: null, archivedAt: null }),
@@ -471,19 +843,182 @@ router.get('/dashboard/candidate', requireUser, requireRoles('candidate'), async
 })
 
 router.patch('/candidate/profile', requireUser, requireRoles('candidate'), async (req, res) => {
+  const projectInput = z.object({
+    title: z.string().trim().min(1).max(120),
+    description: z.string().trim().max(1000).optional().default(''),
+    liveUrl: publicUrl.optional().default(''),
+    repositoryUrl: publicUrl.optional().default(''),
+  }).strict()
+  const certificationInput = z.object({
+    id: objectId.optional(),
+    kind: z.enum(['certificate', 'achievement']),
+    title: z.string().trim().min(1).max(120),
+    issuer: z.string().trim().max(160).optional().default(''),
+    issueDate: z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/).optional().default(''),
+    description: z.string().trim().max(1000).optional().default(''),
+    credentialUrl: publicUrl.optional().default(''),
+  }).strict()
+  const codingProfileInput = z.object({
+    platform: z.enum(['leetcode', 'codechef', 'hackerrank']),
+    username: z.string().trim().min(1).max(50).regex(/^[\w.-]+$/),
+  }).strict()
   const input = validate(z.object({
     name: z.string().trim().min(1).max(120).optional(),
     title: z.string().trim().max(120).optional(),
+    about: z.string().trim().max(3000).optional(),
     phone: z.string().trim().max(40).optional(),
     location: z.string().trim().max(120).optional(),
+    portfolioUrl: publicUrl.optional(),
+    projects: z.array(projectInput).max(5).optional(),
+    certifications: z.array(certificationInput).max(20).optional(),
+    codingProfiles: z.array(codingProfileInput).max(3).optional().refine(
+      (profiles) => !profiles || new Set(profiles.map((profile) => profile.platform)).size === profiles.length,
+      'Each coding platform can only be listed once.',
+    ),
     skills: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
     preferredLocations: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
     openToOpportunities: z.boolean().optional(),
     education: z.array(z.object({ school: z.string().max(160), degree: z.string().max(120), graduationYear: z.number().int().min(1950).max(2100).optional() })).max(20).optional(),
     experience: z.array(z.object({ title: z.string().max(120), company: z.string().max(160), summary: z.string().max(2000).optional() })).max(30).optional(),
   }).strict(), req.body)
-  const user = await User.findByIdAndUpdate(req.user._id, { $set: input }, { new: true, runValidators: true }).select('-googleId')
+  const update = { $set: input }
+  if (input.codingProfiles || input.certifications) {
+    const currentProfile = await User.findById(req.user._id).select('codingProfiles certifications')
+    if (input.codingProfiles) {
+      const previousUsername = currentProfile.codingProfiles.find((item) => item.platform === 'leetcode')?.username
+      const nextUsername = input.codingProfiles.find((item) => item.platform === 'leetcode')?.username
+      if (previousUsername !== nextUsername) {
+        update.$set.leetcodeStats = emptyLeetCodeStats()
+      }
+      const previousHackerRankUsername = currentProfile.codingProfiles.find((item) => item.platform === 'hackerrank')?.username
+      const nextHackerRankUsername = input.codingProfiles.find((item) => item.platform === 'hackerrank')?.username
+      if (previousHackerRankUsername !== nextHackerRankUsername) {
+        update.$set.hackerrankStats = emptyHackerRankStats()
+      }
+    }
+    if (input.certifications) {
+      const existingCertifications = new Map((currentProfile.certifications || []).map((certification) => [String(certification._id), certification]))
+      const seenIds = new Set()
+      update.$set.certifications = input.certifications.map(({ id, ...certification }) => {
+        const existing = id ? existingCertifications.get(id) : null
+        if (id && (!existing || seenIds.has(id))) {
+          const error = new Error('A certification could not be found or was listed more than once.')
+          error.status = 400
+          throw error
+        }
+        if (id) seenIds.add(id)
+        return {
+          ...certification,
+          ...(existing ? {
+            _id: existing._id,
+            fileKey: existing.fileKey,
+            fileName: existing.fileName,
+            fileContentType: existing.fileContentType,
+          } : {}),
+        }
+      })
+    }
+  }
+  const user = await User.findByIdAndUpdate(req.user._id, update, { new: true, runValidators: true }).select('-googleId')
   res.json({ user })
+})
+
+router.post('/candidate/profile/photo', requireUser, requireRoles('candidate'), imageUpload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose a JPG, PNG, or WebP profile photo.' })
+  validateImageSignature(req.file)
+  const key = await savePrivateFile(req.file, `profile-assets/${req.user._id}/photo`)
+  await User.findByIdAndUpdate(req.user._id, { profilePhotoKey: key })
+  res.status(201).json({ profilePhotoKey: key })
+})
+
+router.post('/candidate/profile/banner', requireUser, requireRoles('candidate'), imageUpload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose a JPG, PNG, or WebP banner image.' })
+  validateImageSignature(req.file)
+  const key = await savePrivateFile(req.file, `profile-assets/${req.user._id}/banner`)
+  await User.findByIdAndUpdate(req.user._id, { profileBannerKey: key })
+  res.status(201).json({ profileBannerKey: key })
+})
+
+router.post('/candidate/profile/certifications/:certificationId/file', requireUser, requireRoles('candidate'), certificateUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose a PDF, JPG, PNG, or WebP file.' })
+  validateCertificateSignature(req.file)
+  const certificationId = validate(objectId, req.params.certificationId)
+  const user = await User.findById(req.user._id).select('certifications')
+  const certification = user.certifications.id(certificationId)
+  if (!certification) return res.status(404).json({ error: 'Certification or achievement not found.' })
+  certification.fileKey = await savePrivateFile(req.file, `certifications/${req.user._id}/${certificationId}`)
+  certification.fileName = req.file.originalname.slice(0, 200)
+  certification.fileContentType = req.file.mimetype
+  await user.save()
+  res.status(201).json({
+    certification: {
+      _id: certification._id,
+      fileName: certification.fileName,
+      fileContentType: certification.fileContentType,
+    },
+  })
+})
+
+router.get('/candidate/profile/certifications/:certificationId/file', requireUser, requireRoles('candidate'), async (req, res) => {
+  const certificationId = validate(objectId, req.params.certificationId)
+  const user = await User.findById(req.user._id).select('certifications')
+  const certification = user.certifications.id(certificationId)
+  if (!certification?.fileKey) return res.status(404).json({ error: 'Certificate file not found.' })
+  res.setHeader('Cache-Control', 'private, no-store')
+  await streamPrivateFile(certification.fileKey, res)
+})
+
+router.get('/candidate/profile/assets/:asset', requireUser, requireRoles('candidate'), async (req, res) => {
+  const field = { photo: 'profilePhotoKey', banner: 'profileBannerKey' }[req.params.asset]
+  if (!field) return res.status(404).json({ error: 'Profile image not found.' })
+  const user = await User.findById(req.user._id).select(field)
+  if (!user?.[field]) return res.status(404).json({ error: 'Profile image not found.' })
+  res.setHeader('Cache-Control', 'private, max-age=300')
+  await streamPrivateFile(user[field], res)
+})
+
+router.post('/candidate/profile/coding-stats/refresh', requireUser, requireRoles('candidate'), async (req, res) => {
+  const { username } = validate(z.object({
+    username: z.string().trim().min(1).max(50).regex(/^[\w.-]+$/),
+  }).strict(), req.body)
+  const user = await User.findById(req.user._id).select('codingProfiles')
+  const existingProfile = user.codingProfiles.find((profile) => profile.platform === 'leetcode')
+  const codingProfiles = [
+    ...user.codingProfiles.filter((profile) => profile.platform !== 'leetcode'),
+    { platform: 'leetcode', username },
+  ]
+  const profileUpdate = { codingProfiles }
+  if (existingProfile?.username !== username) {
+    profileUpdate.leetcodeStats = emptyLeetCodeStats()
+  }
+  await User.findByIdAndUpdate(req.user._id, { $set: profileUpdate }, { runValidators: true })
+  const stats = await fetchLeetCodeStats(username)
+  const updatedUser = await User.findByIdAndUpdate(req.user._id, {
+    leetcodeStats: { ...stats, updatedAt: new Date() },
+  }, { new: true, runValidators: true }).select('leetcodeStats')
+  res.json({ stats: updatedUser.leetcodeStats })
+})
+
+router.post('/candidate/profile/hackerrank-stats/refresh', requireUser, requireRoles('candidate'), async (req, res) => {
+  const { username } = validate(z.object({
+    username: z.string().trim().min(1).max(50).regex(/^[\w.-]+$/),
+  }).strict(), req.body)
+  const user = await User.findById(req.user._id).select('codingProfiles')
+  const existingProfile = user.codingProfiles.find((profile) => profile.platform === 'hackerrank')
+  const codingProfiles = [
+    ...user.codingProfiles.filter((profile) => profile.platform !== 'hackerrank'),
+    { platform: 'hackerrank', username },
+  ]
+  const profileUpdate = { codingProfiles }
+  if (existingProfile?.username !== username) {
+    profileUpdate.hackerrankStats = emptyHackerRankStats()
+  }
+  await User.findByIdAndUpdate(req.user._id, { $set: profileUpdate }, { runValidators: true })
+  const stats = await fetchHackerRankStats(username)
+  const updatedUser = await User.findByIdAndUpdate(req.user._id, {
+    hackerrankStats: { ...stats, updatedAt: new Date() },
+  }, { new: true, runValidators: true }).select('hackerrankStats')
+  res.json({ stats: updatedUser.hackerrankStats })
 })
 
 router.post('/candidate/resume', requireUser, requireRoles('candidate'), upload.single('resume'), async (req, res) => {
@@ -702,9 +1237,39 @@ router.get('/recruiter/candidates/:candidateId', requireUser, requireRoles('recr
   ])
   if (!hasApplication && !isDiscoverable) return res.status(404).json({ error: 'Candidate is not available to your organization.' })
   const candidate = await User.findOneAndUpdate({ _id: candidateId, role: 'candidate', status: 'active' }, { $inc: { profileViews: 1 } }, { new: true })
-    .select('name email picture title location skills education experience')
+    .select('name email picture title about location skills education experience portfolioUrl projects certifications codingProfiles leetcodeStats hackerrankStats profilePhotoKey profileBannerKey')
   if (!candidate) return res.status(404).json({ error: 'Candidate not found.' })
   res.json({ candidate })
+})
+
+router.get('/recruiter/candidates/:candidateId/assets/:asset', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const candidateId = validate(objectId, req.params.candidateId)
+  const field = { photo: 'profilePhotoKey', banner: 'profileBannerKey' }[req.params.asset]
+  if (!field) return res.status(404).json({ error: 'Profile image not found.' })
+  const [hasApplication, isDiscoverable] = await Promise.all([
+    Application.exists({ candidate: candidateId, company: req.company._id }),
+    User.exists({ _id: candidateId, role: 'candidate', status: 'active', openToOpportunities: true }),
+  ])
+  if (!hasApplication && !isDiscoverable) return res.status(404).json({ error: 'Candidate is not available to your organization.' })
+  const candidate = await User.findOne({ _id: candidateId, role: 'candidate', status: 'active' }).select(field)
+  if (!candidate?.[field]) return res.status(404).json({ error: 'Profile image not found.' })
+  res.setHeader('Cache-Control', 'private, max-age=300')
+  await streamPrivateFile(candidate[field], res)
+})
+
+router.get('/recruiter/candidates/:candidateId/certifications/:certificationId/file', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const candidateId = validate(objectId, req.params.candidateId)
+  const certificationId = validate(objectId, req.params.certificationId)
+  const [hasApplication, isDiscoverable] = await Promise.all([
+    Application.exists({ candidate: candidateId, company: req.company._id }),
+    User.exists({ _id: candidateId, role: 'candidate', status: 'active', openToOpportunities: true }),
+  ])
+  if (!hasApplication && !isDiscoverable) return res.status(404).json({ error: 'Candidate is not available to your organization.' })
+  const candidate = await User.findOne({ _id: candidateId, role: 'candidate', status: 'active' }).select('certifications')
+  const certification = candidate?.certifications.id(certificationId)
+  if (!certification?.fileKey) return res.status(404).json({ error: 'Certificate file not found.' })
+  res.setHeader('Cache-Control', 'private, no-store')
+  await streamPrivateFile(certification.fileKey, res)
 })
 
 router.post('/recruiter/candidates/:candidateId/invitations', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -755,6 +1320,26 @@ router.get('/recruiter/interviews', requireUser, requireRoles('recruiter'), requ
   const items = await Interview.find({ company: req.company._id })
     .sort({ scheduledAt: 1 }).limit(100).populate('candidate', 'name email').populate({ path: 'application', populate: { path: 'job', select: 'title' } }).lean()
   res.json({ items })
+})
+
+router.delete('/recruiter/interviews/:interviewId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const interviewId = validate(objectId, req.params.interviewId)
+  const interview = await Interview.findOne({ _id: interviewId, company: req.company._id }).select('status scheduledAt durationMinutes')
+  if (!interview) return res.status(404).json({ error: 'Interview not found.' })
+  const completedByTime = interview.status === 'scheduled'
+    && interview.scheduledAt.getTime() + interview.durationMinutes * 60_000 <= Date.now()
+  if (interview.status !== 'completed' && !completedByTime) {
+    return res.status(409).json({ error: 'Only completed interviews can be deleted.' })
+  }
+  const deletedInterview = await Interview.findOneAndDelete({
+    _id: interviewId,
+    company: req.company._id,
+    status: interview.status,
+    scheduledAt: interview.scheduledAt,
+    durationMinutes: interview.durationMinutes,
+  })
+  if (!deletedInterview) return res.status(409).json({ error: 'The interview changed before it could be deleted. Refresh and try again.' })
+  res.status(204).end()
 })
 
 router.post('/reports', requireUser, async (req, res) => {

@@ -13,13 +13,15 @@ import {
   Interview,
   Job,
   Notification,
+  OrganizationPost,
+  OrganizationPostComment,
   Report,
   SavedJob,
   Setting,
   User,
 } from './models/index.js'
 import { requireCompanyMember, requirePrimaryAdmin, requireRoles, requireUser } from './middleware/auth.js'
-import { savePrivateFile, streamPrivateFile } from './storage.js'
+import { deletePrivateFile, savePrivateFile, streamPrivateFile } from './storage.js'
 import { sendCompanyInvitationEmail, sendInterviewEmail } from './email.js'
 import {
   normalizeCandidateNotificationPreferences,
@@ -60,6 +62,18 @@ const imageUpload = multer({
   fileFilter(_req, file, callback) {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
       const error = new Error('Choose a JPG, PNG, or WebP image.')
+      error.status = 400
+      return callback(error)
+    }
+    return callback(null, true)
+  },
+})
+const companyPostMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+  fileFilter(_req, file, callback) {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm'].includes(file.mimetype)) {
+      const error = new Error('Choose a JPG, PNG, WebP, MP4, or WebM file.')
       error.status = 400
       return callback(error)
     }
@@ -264,6 +278,95 @@ router.patch('/recruiter/company', requireUser, requireRoles('recruiter'), requi
   res.json({ company })
 })
 
+router.post('/recruiter/company/assets/:asset', requireUser, requireRoles('recruiter'), requireCompanyMember, imageUpload.single('image'), async (req, res) => {
+  const field = { logo: 'logoKey', banner: 'bannerKey' }[req.params.asset]
+  if (!field) return res.status(404).json({ error: 'Company image not found.' })
+  if (!req.file) return res.status(400).json({ error: 'Choose a JPG, PNG, or WebP company image.' })
+  validateImageSignature(req.file)
+  const key = await savePrivateFile(req.file, `company-assets/${req.company._id}/${req.params.asset}`)
+  const company = await Company.findByIdAndUpdate(req.company._id, { $set: { [field]: key } }, { new: true })
+  if (!company) return res.status(404).json({ error: 'Organization not found.' })
+  res.status(201).json({ [field]: key })
+})
+
+router.get('/recruiter/company/assets/:asset', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const field = { logo: 'logoKey', banner: 'bannerKey' }[req.params.asset]
+  if (!field) return res.status(404).json({ error: 'Company image not found.' })
+  const company = await Company.findById(req.company._id).select(field)
+  if (!company?.[field]) return res.status(404).json({ error: 'Company image not found.' })
+  res.setHeader('Cache-Control', 'private, no-store')
+  await streamPrivateFile(company[field], res)
+})
+
+router.delete('/recruiter/company/assets/:asset', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const field = { logo: 'logoKey', banner: 'bannerKey' }[req.params.asset]
+  if (!field) return res.status(404).json({ error: 'Company image not found.' })
+  const company = await Company.findById(req.company._id).select(field)
+  if (!company) return res.status(404).json({ error: 'Organization not found.' })
+  if (!company[field]) return res.status(204).end()
+  const key = company[field]
+  await deletePrivateFile(key)
+  const updated = await Company.findOneAndUpdate(
+    { _id: req.company._id, [field]: key },
+    { $set: { [field]: '' } },
+    { new: true },
+  )
+  if (!updated) return res.status(409).json({ error: 'The company image changed while it was being removed. Please try again.' })
+  res.status(204).end()
+})
+
+router.get('/recruiter/company-posts', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const posts = await OrganizationPost.find({ company: req.company._id })
+    .select('company caption mediaType createdAt')
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean()
+  const [commentCounts, recentComments] = await Promise.all([
+    getOrganizationPostCommentCounts(posts),
+    getRecentOrganizationPostComments(posts),
+  ])
+  res.json({ items: posts.map((post) => ({
+    ...post,
+    commentCount: commentCounts[String(post._id)] || 0,
+    comments: recentComments[String(post._id)] || [],
+  })) })
+})
+
+router.post('/recruiter/company-posts', requireUser, requireRoles('recruiter'), requireCompanyMember, companyPostMediaUpload.single('media'), async (req, res) => {
+  if (req.company.status !== 'verified') return res.status(403).json({ error: 'Your organization must be verified before publishing company posts.' })
+  const { caption } = validate(z.object({
+    caption: z.string().trim().max(2000).optional().default(''),
+  }).strict(), req.body)
+  if (!caption && !req.file) return res.status(400).json({ error: 'Add a caption or choose a photo or video.' })
+  if (req.file?.mimetype.startsWith('image/') && req.file.size > 5 * 1024 * 1024) {
+    return res.status(400).json({ error: 'Photos must be 5 MB or smaller.' })
+  }
+  validateCompanyPostMedia(req.file)
+  const post = await OrganizationPost.create({
+    company: req.company._id,
+    createdBy: req.user._id,
+    caption,
+    ...(req.file ? { mediaType: req.file.mimetype } : {}),
+  })
+  if (req.file) {
+    post.mediaKey = await savePrivateFile(req.file, `company-posts/${req.company._id}/${post._id}`)
+    await post.save()
+  }
+  res.status(201).json({ post: { _id: post._id, caption: post.caption, mediaType: post.mediaType, createdAt: post.createdAt } })
+})
+
+router.delete('/recruiter/company-posts/:postId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const post = await OrganizationPost.findOne({ _id: postId, company: req.company._id })
+  if (!post) return res.status(404).json({ error: 'Company post not found.' })
+  await Promise.all([
+    OrganizationPostComment.deleteMany({ post: postId, company: req.company._id }),
+    post.deleteOne(),
+    post.mediaKey ? deletePrivateFile(post.mediaKey) : Promise.resolve(),
+  ])
+  res.status(204).end()
+})
+
 router.get('/recruiter/notifications', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const items = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50).lean()
   res.json({ items })
@@ -290,6 +393,55 @@ function validate(schema, input) {
     throw error
   }
   return parsed.data
+}
+
+async function getOrganizationPostCommentCounts(posts) {
+  if (!posts.length) return {}
+  const counts = await OrganizationPostComment.aggregate([
+    { $match: { post: { $in: posts.map((post) => post._id) } } },
+    { $group: { _id: '$post', count: { $sum: 1 } } },
+  ])
+  return Object.fromEntries(counts.map(({ _id, count }) => [String(_id), count]))
+}
+
+async function getRecentOrganizationPostComments(posts) {
+  if (!posts.length) return {}
+  const grouped = await OrganizationPostComment.aggregate([
+    { $match: { post: { $in: posts.map((post) => post._id) } } },
+    {
+      $setWindowFields: {
+        partitionBy: '$post',
+        sortBy: { createdAt: -1 },
+        output: { commentRank: { $documentNumber: {} } },
+      },
+    },
+    { $match: { commentRank: { $lte: 10 } } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: 'author',
+        foreignField: '_id',
+        pipeline: [{ $project: { name: 1, picture: 1 } }],
+        as: 'author',
+      },
+    },
+    { $unwind: { path: '$author', preserveNullAndEmptyArrays: true } },
+    { $sort: { post: 1, createdAt: 1, _id: 1 } },
+    {
+      $group: {
+        _id: '$post',
+        items: {
+          $push: {
+            _id: '$_id',
+            content: '$content',
+            createdAt: '$createdAt',
+            author: '$author',
+          },
+        },
+      },
+    },
+  ])
+  return Object.fromEntries(grouped.map(({ _id, items }) => [String(_id), items]))
 }
 
 function escapeRegex(value) {
@@ -319,6 +471,19 @@ function validateImageSignature(file) {
     && file.buffer.toString('ascii', 8, 12) === 'WEBP'
   if (!isJpeg && !isPng && !isWebp) {
     const error = new Error('The uploaded file content does not match an allowed image format.')
+    error.status = 400
+    throw error
+  }
+}
+
+function validateCompanyPostMedia(file) {
+  if (!file) return
+  if (file.mimetype.startsWith('image/')) return validateImageSignature(file)
+  const isMp4 = file.mimetype === 'video/mp4' && file.buffer.toString('ascii', 4, 8) === 'ftyp'
+  const isWebm = file.mimetype === 'video/webm'
+    && file.buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+  if (!isMp4 && !isWebm) {
+    const error = new Error('The uploaded file content does not match an allowed image or video format.')
     error.status = 400
     throw error
   }
@@ -816,9 +981,137 @@ router.get('/jobs', async (req, res) => {
   res.json({ items: jobs, page, limit, total, pages: Math.ceil(total / limit) })
 })
 
+router.get('/companies/:companyId/assets/:asset', async (req, res) => {
+  const id = validate(objectId, req.params.companyId)
+  const field = { logo: 'logoKey', banner: 'bannerKey' }[req.params.asset]
+  if (!field) return res.status(404).json({ error: 'Company image not found.' })
+  const company = await Company.findOne({ _id: id, status: 'verified' }).select(field)
+  if (!company?.[field]) return res.status(404).json({ error: 'Company image not found.' })
+  res.setHeader('Cache-Control', 'public, max-age=300')
+  await streamPrivateFile(company[field], res)
+})
+
+router.get('/companies/:companyId', async (req, res) => {
+  const id = validate(objectId, req.params.companyId)
+  const company = await Company.findOne({ _id: id, status: 'verified' })
+    .select('name website industry size location description logoKey bannerKey')
+    .lean()
+  if (!company) return res.status(404).json({ error: 'Company profile not found.' })
+  res.json({ company })
+})
+
+router.get('/company-posts/:postId/media', async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const post = await OrganizationPost.findOne({ _id: postId, mediaKey: { $ne: '' } }).select('company mediaKey')
+  if (!post || !await Company.exists({ _id: post.company, status: 'verified' })) {
+    return res.status(404).json({ error: 'Company post media not found.' })
+  }
+  res.setHeader('Cache-Control', 'public, max-age=300')
+  await streamPrivateFile(post.mediaKey, res)
+})
+
+router.get('/candidate/company-posts', requireUser, requireRoles('candidate'), async (_req, res) => {
+  const posts = await OrganizationPost.find()
+    .select('company caption mediaType createdAt')
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate({ path: 'company', select: 'name logoKey', match: { status: 'verified' } })
+    .lean()
+  const visiblePosts = posts.filter((post) => post.company)
+  const commentCounts = await getOrganizationPostCommentCounts(visiblePosts)
+  res.json({ items: visiblePosts.map((post) => ({ ...post, commentCount: commentCounts[String(post._id)] || 0 })) })
+})
+
+router.get('/candidate/company-posts/:postId/comments', requireUser, requireRoles('candidate'), async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const post = await OrganizationPost.findById(postId).select('company')
+  if (!post || !await Company.exists({ _id: post.company, status: 'verified' })) {
+    return res.status(404).json({ error: 'Company post not found.' })
+  }
+  const items = await OrganizationPostComment.find({ post: postId })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate('author', 'name picture')
+    .lean()
+  res.json({ items: items.reverse() })
+})
+
+router.post('/candidate/company-posts/:postId/comments', requireUser, requireRoles('candidate'), async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const { content } = validate(z.object({
+    content: z.string().trim().min(1).max(1000),
+  }).strict(), req.body)
+  const post = await OrganizationPost.findById(postId).select('company')
+  if (!post || !await Company.exists({ _id: post.company, status: 'verified' })) {
+    return res.status(404).json({ error: 'Company post not found.' })
+  }
+  const comment = await OrganizationPostComment.create({
+    post: postId,
+    company: post.company,
+    author: req.user._id,
+    content,
+  })
+  res.status(201).json({
+    comment: {
+      _id: comment._id,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      author: { _id: req.user._id, name: req.user.name, picture: req.user.picture },
+    },
+  })
+})
+
+router.patch('/candidate/company-posts/:postId/comments/:commentId', requireUser, requireRoles('candidate'), async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const commentId = validate(objectId, req.params.commentId)
+  const { content } = validate(z.object({
+    content: z.string().trim().min(1).max(1000),
+  }).strict(), req.body)
+  const comment = await OrganizationPostComment.findOneAndUpdate(
+    { _id: commentId, post: postId, author: req.user._id },
+    { $set: { content } },
+    { new: true, runValidators: true },
+  )
+  if (!comment) return res.status(404).json({ error: 'Your comment was not found.' })
+  res.json({
+    comment: {
+      _id: comment._id,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      author: { _id: req.user._id, name: req.user.name, picture: req.user.picture },
+    },
+  })
+})
+
+router.delete('/candidate/company-posts/:postId/comments/:commentId', requireUser, requireRoles('candidate'), async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const commentId = validate(objectId, req.params.commentId)
+  const comment = await OrganizationPostComment.findOneAndDelete({
+    _id: commentId,
+    post: postId,
+    author: req.user._id,
+  })
+  if (!comment) return res.status(404).json({ error: 'Your comment was not found.' })
+  res.status(204).end()
+})
+
+router.delete('/recruiter/company-posts/:postId/comments/:commentId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const postId = validate(objectId, req.params.postId)
+  const commentId = validate(objectId, req.params.commentId)
+  const post = await OrganizationPost.findOne({ _id: postId, company: req.company._id }).select('_id')
+  if (!post) return res.status(404).json({ error: 'Company post not found.' })
+  const comment = await OrganizationPostComment.findOneAndDelete({
+    _id: commentId,
+    post: postId,
+    company: req.company._id,
+  })
+  if (!comment) return res.status(404).json({ error: 'Comment not found.' })
+  res.status(204).end()
+})
+
 router.get('/jobs/:jobId', async (req, res) => {
   const id = validate(objectId, req.params.jobId)
-  const job = await Job.findOne({ _id: id, status: 'published' }).populate('company', 'name website industry size location description status')
+  const job = await Job.findOne({ _id: id, status: 'published' }).populate('company', 'name website industry size location description status logoKey bannerKey')
   if (!job) return res.status(404).json({ error: 'Job not found.' })
   res.json({ job })
 })

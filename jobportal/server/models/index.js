@@ -120,6 +120,7 @@ const companySchema = new Schema({
   description: { type: String, trim: true, maxlength: 3000, default: '' },
   contactEmail: { type: String, lowercase: true, trim: true, default: '' },
   logoKey: { type: String, default: '' },
+  bannerKey: { type: String, default: '' },
   verificationDocumentKey: { type: String, default: '' },
   status: { type: String, enum: ['pending', 'verified', 'rejected', 'suspended', 'removed'], default: 'pending', index: true },
   owner: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -233,6 +234,23 @@ const companyInviteSchema = new Schema({
 }, { timestamps: true })
 companyInviteSchema.index({ email: 1, company: 1 }, { unique: true })
 
+const organizationPostSchema = new Schema({
+  company: { type: Schema.Types.ObjectId, ref: 'Company', required: true, index: true },
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  caption: { type: String, trim: true, maxlength: 2000, default: '' },
+  mediaKey: { type: String, default: '' },
+  mediaType: { type: String, enum: ['', 'image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm'], default: '' },
+}, { timestamps: true, strict: 'throw' })
+organizationPostSchema.index({ company: 1, createdAt: -1 })
+
+const organizationPostCommentSchema = new Schema({
+  post: { type: Schema.Types.ObjectId, ref: 'OrganizationPost', required: true, index: true },
+  company: { type: Schema.Types.ObjectId, ref: 'Company', required: true, index: true },
+  author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  content: { type: String, required: true, trim: true, maxlength: 1000 },
+}, { timestamps: true, strict: 'throw' })
+organizationPostCommentSchema.index({ post: 1, createdAt: -1 })
+
 export const User = mongoose.models.User || mongoose.model('User', userSchema)
 export const Company = mongoose.models.Company || mongoose.model('Company', companySchema)
 export const Job = mongoose.models.Job || mongoose.model('Job', jobSchema)
@@ -245,3 +263,5 @@ export const AdminLog = mongoose.models.AdminLog || mongoose.model('AdminLog', a
 export const Setting = mongoose.models.Setting || mongoose.model('Setting', settingSchema)
 export const AdminInvite = mongoose.models.AdminInvite || mongoose.model('AdminInvite', adminInviteSchema)
 export const CompanyInvite = mongoose.models.CompanyInvite || mongoose.model('CompanyInvite', companyInviteSchema)
+export const OrganizationPost = mongoose.models.OrganizationPost || mongoose.model('OrganizationPost', organizationPostSchema)
+export const OrganizationPostComment = mongoose.models.OrganizationPostComment || mongoose.model('OrganizationPostComment', organizationPostCommentSchema)

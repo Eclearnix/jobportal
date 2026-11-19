@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import DashboardPage, { JobDetailsPage } from './pages/DashboardPage'
+import DashboardPage, { CompanyDetailsPage, JobDetailsPage } from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import OnboardingPage from './pages/OnboardingPage'
 import './App.css'
@@ -74,6 +74,7 @@ function AppRoutes() {
       <Route path="/onboarding/candidate" element={<OnboardingRoute role="candidate" />} />
       <Route path="/onboarding/recruiter" element={<OnboardingRoute role="recruiter" />} />
       <Route path="/jobs/:jobId" element={<ProtectedRoute role="candidate"><JobDetailsPage /></ProtectedRoute>} />
+      <Route path="/companies/:companyId" element={<ProtectedRoute role="candidate"><CompanyDetailsPage /></ProtectedRoute>} />
       <Route path="/candidate" element={<ProtectedRoute role="candidate"><DashboardPage role="candidate" /></ProtectedRoute>} />
       <Route path="/candidate/:section" element={<ProtectedRoute role="candidate"><DashboardPage role="candidate" /></ProtectedRoute>} />
       <Route path="/organization" element={<ProtectedRoute role="recruiter"><DashboardPage role="recruiter" /></ProtectedRoute>} />

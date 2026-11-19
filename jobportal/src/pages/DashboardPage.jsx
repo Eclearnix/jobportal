@@ -1,8 +1,9 @@
 import { Component, cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, ClipboardList, Code2, ExternalLink,
-  FileText, ImagePlus, LayoutDashboard, LogOut, Plus, Search, Settings, Shield, Trash2, Trophy, Users, UserRound, X,
+  ArrowDownToLine, ArrowRight, Bell, BriefcaseBusiness, Building2, Camera, CheckCircle2, CircleAlert, Clapperboard, ClipboardList, Code2,
+  ExternalLink, FileText, ImagePlus, LayoutDashboard, LogOut, MessageCircle, Plus, Search, Send, Settings, Share2,
+  Shield, Trash2, Trophy, Users, UserRound, X,
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -27,12 +28,12 @@ const navigation = {
   candidate: [
     ['Overview', LayoutDashboard], ['Find Jobs', Search], ['My Applications', ClipboardList],
     ['Saved Jobs', BriefcaseBusiness], ['My Profile', UserRound], ['Resume', FileText],
-    ['Interviews', BriefcaseBusiness], ['Notifications', Bell],
+    ['Company Life', Camera], ['Interviews', BriefcaseBusiness], ['Notifications', Bell],
   ],
   recruiter: [
     ['Overview', LayoutDashboard], ['Post a Job', BriefcaseBusiness], ['Manage Jobs', ClipboardList],
     ['Applications', Users], ['Candidates', UserRound], ['Discover Candidates', Search], ['Company Profile', Building2],
-    ['Interviews', BriefcaseBusiness], ['Team Management', Users], ['Notifications', Bell], ['Settings', Settings],
+    ['Organization Posts & Clips', Clapperboard], ['Interviews', BriefcaseBusiness], ['Team Management', Users], ['Notifications', Bell], ['Settings', Settings],
   ],
   super_admin: [
     ['Overview', LayoutDashboard], ['User Management', Users], ['Organization Management', Building2],
@@ -524,6 +525,7 @@ function Pill({ children }) {
 }
 
 function JobSearch({ onOpen, onSaved }) {
+  const navigate = useNavigate()
   const [filters, setFilters] = useState({ q: '', location: '', workMode: '', employmentType: '', industry: '', experienceLevel: '', salaryMin: '' })
   const [items, setItems] = useState([])
   const [busy, setBusy] = useState(true)
@@ -572,8 +574,16 @@ function JobSearch({ onOpen, onSaved }) {
       {error && <ErrorNotice message={error} onRetry={search} />}
       <div className="job-results">{items.map((job) => (
         <article className="job-result-card" key={job._id}>
-          <div className="company-avatar">{job.company?.name?.slice(0, 1) || 'J'}</div>
-          <div className="job-result-main"><button type="button" className="job-title-link" onClick={() => onOpen(job._id)}>{job.title}</button><strong>{job.company?.name}</strong><span>{job.location} · {humanize(job.workMode)} · {humanize(job.employmentType)}</span></div>
+          <div className="company-avatar">{job.company?.logoKey
+            ? <img src={`/api/companies/${job.company._id}/assets/logo?v=${encodeURIComponent(job.company.logoKey)}`} alt="" />
+            : job.company?.name?.slice(0, 1) || 'J'}</div>
+          <div className="job-result-main">
+            <button type="button" className="job-title-link" onClick={() => onOpen(job._id)}>{job.title}</button>
+            {job.company?._id
+              ? <button type="button" className="job-company-link" onClick={() => navigate(`/companies/${job.company._id}`)}>{job.company.name}</button>
+              : <strong>{job.company?.name}</strong>}
+            <span>{job.location} · {humanize(job.workMode)} · {humanize(job.employmentType)}</span>
+          </div>
           <div className="job-result-actions">
             <button type="button" className="subtle-button" onClick={() => onOpen(job._id)}>View job</button>
             <button type="button" className="subtle-button" onClick={() => onSaved(job._id)}>Save job</button>
@@ -917,6 +927,16 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
     event.currentTarget.querySelector(`[data-profile-tab-button="${profileTabs[nextIndex].key}"]`)?.focus()
   }
 
+  function goToNextProfileTab() {
+    const currentIndex = profileTabs.findIndex((tab) => tab.key === activeProfileTab)
+    const nextTab = profileTabs[currentIndex + 1]
+    if (!nextTab) return
+    setActiveProfileTab(nextTab.key)
+    window.requestAnimationFrame(() => {
+      document.getElementById(`candidate-profile-tab-${nextTab.key}`)?.focus()
+    })
+  }
+
   async function uploadProfileImage(asset, file) {
     setImageBusy((current) => ({ ...current, [asset]: true }))
     setImageError('')
@@ -1209,7 +1229,10 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
           </section>
         </div>
         {error && <p className="auth-error" role="alert">{error}</p>}
-        <button type="submit" className="green-button" disabled={busy}>{busy ? 'Saving…' : 'Save profile'} <ArrowRight size={14} /></button>
+        <div className="candidate-profile-actions">
+          {activeProfileTab !== profileTabs[profileTabs.length - 1].key && <button type="button" className="subtle-button" onClick={goToNextProfileTab} disabled={busy}>Next <ArrowRight size={14} /></button>}
+          <button type="submit" className="green-button" disabled={busy}>{busy ? 'Saving…' : 'Save profile'} <ArrowRight size={14} /></button>
+        </div>
       </form>
       <div className="resume-manager"><div><h3>Resume</h3><p>Private PDF or DOCX · Maximum 5 MB</p></div>{profile?.resumeKey && <button type="button" className="subtle-button" onClick={openResume}><ArrowDownToLine size={14} /> Open resume</button>}<label className="subtle-button file-upload-button">{resumeBusy ? 'Uploading…' : 'Upload new resume'}<input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={uploadResume} disabled={resumeBusy} /></label></div>
       {resumeError && <p className="auth-error" role="alert">{resumeError}</p>}
@@ -1224,7 +1247,7 @@ const defaultCandidateNotificationPreferences = {
   interviewReminders: { inApp: true, email: true },
 }
 
-function CandidateSettings({ notificationPreferences, onSaved }) {
+function CandidateSettings({ notificationPreferences, onSaved, onNotify }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [preferences, setPreferences] = useState(defaultCandidateNotificationPreferences)
@@ -1246,7 +1269,7 @@ function CandidateSettings({ notificationPreferences, onSaved }) {
       const nextPreferences = result.notificationPreferences || preferences
       setPreferences(nextPreferences)
       await onSaved()
-      window.alert('Settings updated')
+      onNotify('Settings updated')
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -1600,7 +1623,11 @@ function DashboardWorkspace({ role }) {
   const [showRemovedApplications, setShowRemovedApplications] = useState(false)
   const [showArchivedNotifications, setShowArchivedNotifications] = useState(false)
   const [notificationActionsBusy, setNotificationActionsBusy] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [confirmation, setConfirmation] = useState(null)
   const loadSequence = useRef(0)
+  const toastTimer = useRef(null)
+  const confirmationTimer = useRef(null)
   const [today] = useState(() => new Date())
   const navItems = navigation[role]
   const activePage = navItems.find(([label]) => slug(label) === section)?.[0]
@@ -1608,6 +1635,30 @@ function DashboardWorkspace({ role }) {
   const title = activePage === 'Overview'
     ? role === 'candidate' ? `Welcome back, ${user.name.split(' ')[0]}.` : role === 'recruiter' ? `Welcome back, ${user.name.split(' ')[0]}.` : 'Your platform, at a glance.'
     : activePage
+
+  const notify = useCallback((message, type = 'success') => {
+    window.clearTimeout(toastTimer.current)
+    setToast({ id: Date.now(), message, type })
+    toastTimer.current = window.setTimeout(() => setToast(null), 4000)
+  }, [])
+
+  const requestConfirmation = useCallback((message, action) => {
+    window.clearTimeout(confirmationTimer.current)
+    setConfirmation({ id: Date.now(), message, action })
+    confirmationTimer.current = window.setTimeout(() => setConfirmation(null), 4000)
+  }, [])
+
+  const answerConfirmation = useCallback(async (confirmed) => {
+    const pending = confirmation
+    window.clearTimeout(confirmationTimer.current)
+    setConfirmation(null)
+    if (confirmed && pending) await pending.action()
+  }, [confirmation])
+
+  useEffect(() => () => {
+    window.clearTimeout(toastTimer.current)
+    window.clearTimeout(confirmationTimer.current)
+  }, [])
 
   const reload = useCallback(async ({ quiet = false } = {}) => {
     const requestId = ++loadSequence.current
@@ -1636,6 +1687,7 @@ function DashboardWorkspace({ role }) {
             'Saved Jobs': '/candidate/saved-jobs',
             'My Profile': '/dashboard/candidate',
             Resume: '/dashboard/candidate',
+            'Company Life': '/candidate/company-posts',
             Interviews: '/candidate/interviews',
             Notifications: `/candidate/notifications?archived=${showArchivedNotifications}`,
             Settings: '/candidate/settings',
@@ -1648,6 +1700,7 @@ function DashboardWorkspace({ role }) {
             Applications: `/recruiter/applications${showArchivedApplications ? '?archived=true' : ''}`,
             Candidates: '/recruiter/candidates',
             'Discover Candidates': '/recruiter/discoverable-candidates',
+            'Organization Posts & Clips': '/recruiter/company-posts',
             Interviews: '/recruiter/interviews',
             'Company Profile': '/dashboard/recruiter',
             'Team Management': '/recruiter/team',
@@ -1830,10 +1883,10 @@ function DashboardWorkspace({ role }) {
         ? <button type="button" className="org-action-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: false } }))}>Restore</button>
         : <>
           {['submitted', 'under_review', 'shortlisted'].includes(row.resource.status) && <button type="button" className="org-action-button org-remove-button" onClick={() => mutate(() => api(`/candidate/applications/${row.id}/withdraw`, { method: 'PATCH' }))}>Withdraw</button>}
-          <button type="button" className="org-action-button org-remove-button" onClick={async () => {
-            if (!window.confirm('Remove this application from your list? It will remain visible to the organization.')) return
-            await mutate(() => api(`/candidate/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: true } }))
-          }}>Delete</button>
+          <button type="button" className="org-action-button org-remove-button" onClick={() => requestConfirmation(
+            'Remove this application from your list? It will remain visible to the organization.',
+            () => mutate(() => api(`/candidate/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: true } })),
+          )}>Delete</button>
         </>}
     </div>} empty={showRemovedApplications ? 'No removed applications.' : 'You have not applied to any jobs yet.'} />
   } else if (isCandidate && activePage === 'Saved Jobs') {
@@ -1868,10 +1921,10 @@ function DashboardWorkspace({ role }) {
           : mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>}
         {!isCandidate && row.resource.readAt && !isJobInvitation && 'Read'}
         {isCandidate && <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => runNotificationMutation(() => api(`/candidate/notifications/${row.id}/archive`, { method: 'PATCH', body: { archived: !showArchivedNotifications } }))}>{showArchivedNotifications ? 'Restore' : 'Archive'}</button>}
-        {isCandidate && <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={async () => {
-          if (!window.confirm('Permanently delete this notification?')) return
-          await runNotificationMutation(() => api(`/candidate/notifications/${row.id}`, { method: 'DELETE' }))
-        }}>Delete</button>}
+        {isCandidate && <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={() => requestConfirmation(
+          'Permanently delete this notification?',
+          () => runNotificationMutation(() => api(`/candidate/notifications/${row.id}`, { method: 'DELETE' })),
+        )}>Delete</button>}
       </div>
     }} empty={isCandidate && showArchivedNotifications ? 'No archived notifications.' : 'You’re all caught up.'} className={isCandidate ? 'candidate-notification-table' : ''} />
   } else if (isRecruiter && ['Manage Jobs', 'Applications', 'Candidates'].includes(activePage)) {
@@ -1903,9 +1956,10 @@ function DashboardWorkspace({ role }) {
         ? <div className="application-actions">
           <button className="org-action-button" type="button" onClick={() => mutate(() => api(`/recruiter/jobs/${row.id}/status`, { method: 'PATCH', body: { status: row.resource.status === 'published' ? 'paused' : 'published' } }))}>{row.resource.status === 'published' ? 'Pause' : 'Publish'}</button>
           <button className="org-action-button org-remove-button" type="button" onClick={() => {
-            if (window.confirm(`Permanently delete "${row.resource.title}"? Applications, saved-job entries, and interviews will remain, but the job details will no longer be available.`)) {
-              mutate(() => api(`/recruiter/jobs/${row.id}`, { method: 'DELETE' }))
-            }
+            requestConfirmation(
+              `Permanently delete "${row.resource.title}"? Applications, saved-job entries, and interviews will remain, but the job details will no longer be available.`,
+              () => mutate(() => api(`/recruiter/jobs/${row.id}`, { method: 'DELETE' })),
+            )
           }}>Delete</button>
         </div>
         : activePage === 'Candidates'
@@ -1939,9 +1993,10 @@ function DashboardWorkspace({ role }) {
       resource: item,
     }))} actions={(row) => isInterviewCompleted(row.resource)
       ? <button type="button" className="org-action-button org-remove-button" onClick={() => {
-        if (window.confirm(`Permanently delete the completed interview with ${row.resource.candidate?.name || 'this candidate'}?`)) {
-          void mutate(() => api(`/recruiter/interviews/${row.id}`, { method: 'DELETE' }))
-        }
+        requestConfirmation(
+          `Permanently delete the completed interview with ${row.resource.candidate?.name || 'this candidate'}?`,
+          () => mutate(() => api(`/recruiter/interviews/${row.id}`, { method: 'DELETE' })),
+        )
       }}>Delete</button>
       : '—'} empty="Scheduled interviews will appear here." />
   } else if (isAdmin && activePage === 'Organization Management' || isAdmin && activePage === 'Verification Requests') {
@@ -1954,9 +2009,10 @@ function DashboardWorkspace({ role }) {
       {row.resource.status !== 'verified' && <button className="org-action-button" type="button" onClick={() => mutate(() => adminStatus('company', row.id, 'verified'))}>Verify</button>}
       {row.resource.status !== 'suspended' && <button className="org-action-button" type="button" onClick={() => mutate(() => adminStatus('company', row.id, 'suspended'))}>Suspend</button>}
       <button className="org-action-button org-remove-button" type="button" onClick={() => {
-        if (window.confirm(`Remove ${row.resource.name} from the marketplace? Their jobs will be closed and their team access suspended.`)) {
-          mutate(() => api(`/admin/organizations/${row.id}`, { method: 'DELETE' }))
-        }
+        requestConfirmation(
+          `Remove ${row.resource.name} from the marketplace? Their jobs will be closed and their team access suspended.`,
+          () => mutate(() => api(`/admin/organizations/${row.id}`, { method: 'DELETE' })),
+        )
       }}>Remove</button>
     </div>} empty="No organizations match this view." />
   } else if (isAdmin && activePage === 'User Management') {
@@ -2044,6 +2100,7 @@ function DashboardWorkspace({ role }) {
           )}
 
           {!loading && !error && isCandidate && activePage === 'Find Jobs' && <JobSearch onOpen={(id) => navigate(`/jobs/${id}`)} onSaved={(id) => mutate(() => saveJob(id))} />}
+          {!loading && !error && isCandidate && activePage === 'Company Life' && <CompanyLifeFeed posts={viewData?.items || []} onConfirm={requestConfirmation} />}
           {!loading && !error && isRecruiter && activePage === 'Post a Job' && <JobPostForm onCreated={(job) => {
             goTo('Manage Jobs')
             setJobPostMessage(job.status === 'pending_review'
@@ -2056,7 +2113,8 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && isRecruiter && activePage === 'Settings' && <OrganizationSettings settings={viewData} reload={reload} />}
           {!loading && !error && isAdmin && activePage === 'Admin Management' && <AdminInvites data={viewData} reload={reload} />}
           {!loading && !error && isRecruiter && activePage === 'Company Profile' && <CompanyProfile company={viewData?.company} onSaved={reload} />}
-          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateSettings notificationPreferences={viewData?.notificationPreferences || payload?.notificationPreferences} onSaved={reload} />}
+          {!loading && !error && isRecruiter && activePage === 'Organization Posts & Clips' && <OrganizationPostsManager posts={viewData?.items || []} company={payload?.company} onSaved={() => reload({ quiet: true })} onConfirm={requestConfirmation} />}
+          {!loading && !error && isCandidate && activePage === 'Settings' && <CandidateSettings notificationPreferences={viewData?.notificationPreferences || payload?.notificationPreferences} onSaved={reload} onNotify={notify} />}
           {!loading && !error && isRecruiter && activePage === 'Team Management' && <TeamManagement data={viewData} reload={reload} timeZone={organizationTimeZone} />}
           {!loading && !error && table && <section className="module-section">
             {isCandidate && activePage === 'My Applications' && <div className="candidate-applications-toolbar">
@@ -2064,10 +2122,10 @@ function DashboardWorkspace({ role }) {
             </div>}
             {isCandidate && activePage === 'Notifications' && <div className="candidate-notifications-toolbar">
               <button type="button" className="subtle-button" disabled={notificationActionsBusy} onClick={() => setShowArchivedNotifications((current) => !current)}>{showArchivedNotifications ? 'View active notifications' : 'View archived notifications'}</button>
-              <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={async () => {
-                if (!window.confirm('Permanently delete all of your notifications, including archived ones? This cannot be undone.')) return
-                await runNotificationMutation(() => api('/candidate/notifications', { method: 'DELETE' }))
-              }}>Clear notifications</button>
+              <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={() => requestConfirmation(
+                'Permanently delete all of your notifications, including archived ones? This cannot be undone.',
+                () => runNotificationMutation(() => api('/candidate/notifications', { method: 'DELETE' })),
+              )}>Clear notifications</button>
             </div>}
             {(canSearch || isRecruiter && activePage === 'Applications') && <div className="module-heading">
               <div>
@@ -2088,6 +2146,29 @@ function DashboardWorkspace({ role }) {
           <footer className="dashboard-footer"><span>Made for better work, together.</span><span>Signed in as {user.email}</span></footer>
         </div>
       </main>
+      {(toast || confirmation) && createPortal(
+        <div className="app-toast-stack">
+          {confirmation && <section className="app-toast app-toast-confirm" role="alertdialog" aria-label="Confirm action" key={`confirm-${confirmation.id}`}>
+            <CircleAlert size={20} aria-hidden="true" />
+            <div className="app-toast-content">
+              <p>{confirmation.message}</p>
+              <div className="app-toast-actions">
+                <button type="button" className="app-toast-cancel" onClick={() => answerConfirmation(false)}>Cancel</button>
+                <button type="button" className="app-toast-confirm-button" onClick={() => answerConfirmation(true)}>Continue</button>
+              </div>
+            </div>
+          </section>}
+          {toast && <div className={`app-toast app-toast-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'} key={`toast-${toast.id}`}>
+            {toast.type === 'error' ? <CircleAlert size={20} aria-hidden="true" /> : <CheckCircle2 size={20} aria-hidden="true" />}
+            <p>{toast.message}</p>
+            <button type="button" className="app-toast-dismiss" aria-label="Dismiss notification" onClick={() => {
+              window.clearTimeout(toastTimer.current)
+              setToast(null)
+            }}>×</button>
+          </div>}
+        </div>,
+        document.body,
+      )}
     </div>
   )
 }
@@ -2098,9 +2179,332 @@ function AdminOrganizationTable({ rows, onAction }) {
   }))} actions={(row) => <div className="organization-actions"><button type="button" className="org-action-button" onClick={() => onAction(() => api(`/admin/organizations/${row.id}/status`, { method: 'PATCH', body: { status: 'verified' } }))}>Verify</button><button type="button" className="org-action-button org-remove-button" onClick={() => onAction(() => api(`/admin/organizations/${row.id}/status`, { method: 'PATCH', body: { status: 'rejected' } }))}>Reject</button></div>} empty="No organizations are waiting for review." />
 }
 
+function CompanyLifeFeed({ posts, onConfirm }) {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [commentsByPost, setCommentsByPost] = useState({})
+  const [commentDrafts, setCommentDrafts] = useState({})
+  const [commentBusy, setCommentBusy] = useState({})
+  const [commentActionBusy, setCommentActionBusy] = useState({})
+  const [commentCounts, setCommentCounts] = useState({})
+  const [editingComment, setEditingComment] = useState(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [shareMessage, setShareMessage] = useState('')
+
+  useEffect(() => {
+    if (!posts.length || !window.location.hash) return
+    const targetId = decodeURIComponent(window.location.hash.slice(1))
+    window.requestAnimationFrame(() => document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [posts])
+
+  async function toggleComments(postId) {
+    const isOpen = Boolean(commentsByPost[postId])
+    if (isOpen) {
+      setCommentsByPost((current) => ({ ...current, [postId]: null }))
+      return
+    }
+    setCommentsByPost((current) => ({ ...current, [postId]: { loading: true, items: [] } }))
+    try {
+      const { items } = await api(`/candidate/company-posts/${postId}/comments`)
+      setCommentsByPost((current) => ({ ...current, [postId]: { loading: false, items } }))
+    } catch (error) {
+      setCommentsByPost((current) => ({ ...current, [postId]: { loading: false, items: [], error: error.message } }))
+    }
+  }
+
+  async function addComment(event, post) {
+    event.preventDefault()
+    const content = commentDrafts[post._id]?.trim()
+    if (!content) return
+    setCommentBusy((current) => ({ ...current, [post._id]: true }))
+    try {
+      const { comment } = await api(`/candidate/company-posts/${post._id}/comments`, { method: 'POST', body: { content } })
+      setCommentsByPost((current) => ({
+        ...current,
+        [post._id]: { ...current[post._id], items: [...(current[post._id]?.items || []), comment], error: '' },
+      }))
+      setCommentCounts((current) => ({ ...current, [post._id]: (current[post._id] ?? post.commentCount) + 1 }))
+      setCommentDrafts((current) => ({ ...current, [post._id]: '' }))
+    } catch (error) {
+      setCommentsByPost((current) => ({
+        ...current,
+        [post._id]: { ...current[post._id], loading: false, error: error.message },
+      }))
+    } finally {
+      setCommentBusy((current) => ({ ...current, [post._id]: false }))
+    }
+  }
+
+  async function saveCommentEdit(event) {
+    event.preventDefault()
+    if (!editingComment) return
+    const { postId, commentId } = editingComment
+    const content = editDraft.trim()
+    if (!content) return
+    setCommentActionBusy((current) => ({ ...current, [commentId]: true }))
+    try {
+      const { comment } = await api(`/candidate/company-posts/${postId}/comments/${commentId}`, { method: 'PATCH', body: { content } })
+      setCommentsByPost((current) => ({
+        ...current,
+        [postId]: {
+          ...current[postId],
+          items: current[postId].items.map((item) => item._id === commentId ? comment : item),
+          error: '',
+        },
+      }))
+      setEditingComment(null)
+      setEditDraft('')
+    } catch (error) {
+      setCommentsByPost((current) => ({ ...current, [postId]: { ...current[postId], error: error.message } }))
+    } finally {
+      setCommentActionBusy((current) => ({ ...current, [commentId]: false }))
+    }
+  }
+
+  function deleteComment(post, comment) {
+    onConfirm('Delete your comment?', async () => {
+      setCommentActionBusy((current) => ({ ...current, [comment._id]: true }))
+      try {
+        await api(`/candidate/company-posts/${post._id}/comments/${comment._id}`, { method: 'DELETE' })
+        setCommentsByPost((current) => ({
+          ...current,
+          [post._id]: {
+            ...current[post._id],
+            items: current[post._id].items.filter((item) => item._id !== comment._id),
+            error: '',
+          },
+        }))
+        setCommentCounts((current) => ({ ...current, [post._id]: Math.max(0, (current[post._id] ?? post.commentCount) - 1) }))
+        if (editingComment?.commentId === comment._id) setEditingComment(null)
+      } catch (error) {
+        setCommentsByPost((current) => ({ ...current, [post._id]: { ...current[post._id], error: error.message } }))
+      } finally {
+        setCommentActionBusy((current) => ({ ...current, [comment._id]: false }))
+      }
+    })
+  }
+
+  async function sharePost(postId) {
+    const link = `${window.location.origin}${paths.candidate}/company-life#post-${postId}`
+    try {
+      await navigator.clipboard.writeText(link)
+      setShareMessage('Post link copied to clipboard.')
+    } catch {
+      setShareMessage('Could not copy the post link. Check clipboard permissions and try again.')
+    }
+  }
+
+  if (!posts.length) return <section className="company-life-empty"><Camera size={28} /><h2>Company life, straight from the team</h2><p>Verified organizations’ photos, clips, and stories will appear here.</p></section>
+
+  return <section className="company-life-feed" aria-label="Company life posts">
+    {shareMessage && <p className="integration-notice" role="status">{shareMessage}</p>}
+    {posts.map((post) => {
+      const comments = commentsByPost[post._id]
+      const commentCount = commentCounts[post._id] ?? post.commentCount
+      return <article className="company-life-post" id={`post-${post._id}`} key={post._id}>
+        <header className="company-life-post-header">
+          <div className="company-avatar">{post.company?.logoKey
+            ? <img src={`/api/companies/${post.company._id}/assets/logo?v=${encodeURIComponent(post.company.logoKey)}`} alt="" />
+            : post.company?.name?.slice(0, 1) || 'O'}</div>
+          <div className="company-life-post-byline">
+            <button type="button" className="job-company-link" onClick={() => navigate(`/companies/${post.company._id}`)}>{post.company?.name}</button>
+            <time dateTime={post.createdAt}>{dateLabel(post.createdAt)}</time>
+          </div>
+        </header>
+        {post.caption && <p className="company-life-caption">{post.caption}</p>}
+        {post.mediaType && <div className="company-life-media">
+          {post.mediaType.startsWith('video/')
+            ? <video controls preload="metadata" src={`/api/company-posts/${post._id}/media`}>Your browser does not support video playback.</video>
+            : <img src={`/api/company-posts/${post._id}/media`} alt={`Photo shared by ${post.company?.name}`} loading="lazy" />}
+        </div>}
+        <footer className="company-life-post-actions">
+          <button type="button" className="subtle-button" onClick={() => toggleComments(post._id)}><MessageCircle size={15} /> Comments ({commentCount})</button>
+          <button type="button" className="subtle-button" onClick={() => sharePost(post._id)}><Share2 size={15} /> Share</button>
+        </footer>
+        {comments && <div className="company-life-comments">
+          {comments.loading && <p role="status">Loading comments…</p>}
+          {comments.error && <p className="auth-error" role="alert">{comments.error}</p>}
+          {comments.items?.map((comment) => <div className="company-life-comment" key={comment._id}>
+            <UserAvatar name={comment.author?.name} picture={comment.author?.picture} />
+            <div className="company-life-comment-body">
+              <strong>{comment.author?.name || 'Candidate'}</strong>
+              {editingComment?.postId === post._id && editingComment.commentId === comment._id
+                ? <form className="company-life-comment-edit-form" onSubmit={saveCommentEdit}>
+                  <textarea aria-label="Edit your comment" value={editDraft} onChange={(event) => setEditDraft(event.target.value)} maxLength={1000} rows="2" required />
+                  <div><button type="submit" className="green-button" disabled={commentActionBusy[comment._id] || !editDraft.trim()}>{commentActionBusy[comment._id] ? 'Saving…' : 'Save edit'}</button><button type="button" className="text-button" onClick={() => { setEditingComment(null); setEditDraft('') }} disabled={commentActionBusy[comment._id]}>Cancel</button></div>
+                </form>
+                : <><p>{comment.content}</p>{comment.author?._id && String(comment.author._id) === String(user?.id) && <div className="company-life-comment-actions">
+                  <button type="button" className="text-button" onClick={() => { setEditingComment({ postId: post._id, commentId: comment._id }); setEditDraft(comment.content) }}>Edit</button>
+                  <button type="button" className="text-button" onClick={() => deleteComment(post, comment)} disabled={commentActionBusy[comment._id]}>{commentActionBusy[comment._id] ? 'Deleting…' : 'Delete'}</button>
+                </div>}</>}
+            </div>
+          </div>)}
+          <form onSubmit={(event) => addComment(event, post)}>
+            <textarea aria-label={`Comment on ${post.company?.name}'s post`} value={commentDrafts[post._id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post._id]: event.target.value }))} maxLength={1000} rows="2" placeholder="Share a thoughtful comment…" required />
+            <button type="submit" className="green-button" disabled={commentBusy[post._id] || !commentDrafts[post._id]?.trim()}>{commentBusy[post._id] ? 'Posting…' : 'Comment'} <Send size={14} /></button>
+          </form>
+        </div>}
+      </article>
+    })}
+  </section>
+}
+
+function OrganizationPostsManager({ posts, company, onSaved, onConfirm }) {
+  const [caption, setCaption] = useState('')
+  const [mediaFile, setMediaFile] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [deletingPost, setDeletingPost] = useState('')
+  const [deletingComment, setDeletingComment] = useState('')
+  const [error, setError] = useState('')
+  const fileInput = useRef(null)
+  const isVerified = company?.status === 'verified'
+
+  function chooseMedia(event) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+    const maxSize = file.type.startsWith('image/') ? 5 * 1024 * 1024 : 25 * 1024 * 1024
+    if (file.size > maxSize) {
+      setMediaFile(null)
+      setError(file.type.startsWith('image/') ? 'Photos must be 5 MB or smaller.' : 'Clips must be 25 MB or smaller.')
+      return
+    }
+    setError('')
+    setMediaFile(file)
+  }
+
+  async function publishPost(event) {
+    event.preventDefault()
+    if (!caption.trim() && !mediaFile) {
+      setError('Add a caption or choose a photo or video.')
+      return
+    }
+    setError('')
+    setBusy(true)
+    const body = new FormData()
+    body.set('caption', caption.trim())
+    if (mediaFile) body.set('media', mediaFile)
+    try {
+      await api('/recruiter/company-posts', { method: 'POST', body })
+      setCaption('')
+      setMediaFile(null)
+      if (fileInput.current) fileInput.current.value = ''
+      await onSaved()
+    } catch (publishError) {
+      setError(publishError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function deletePost(post) {
+    onConfirm('Delete this company post and its comments?', async () => {
+      setDeletingPost(post._id)
+      setError('')
+      try {
+        await api(`/recruiter/company-posts/${post._id}`, { method: 'DELETE' })
+        await onSaved()
+      } catch (deleteError) {
+        setError(deleteError.message)
+      } finally {
+        setDeletingPost('')
+      }
+    })
+  }
+
+  function deletePostComment(post, comment) {
+    onConfirm('Delete this candidate comment from your company post?', async () => {
+      setDeletingComment(comment._id)
+      setError('')
+      try {
+        await api(`/recruiter/company-posts/${post._id}/comments/${comment._id}`, { method: 'DELETE' })
+        await onSaved()
+      } catch (deleteError) {
+        setError(deleteError.message)
+      } finally {
+        setDeletingComment('')
+      }
+    })
+  }
+
+  return <section className="organization-posts">
+    <header className="organization-posts-heading"><div><h2>Show candidates what life is like at your company</h2><p>Share team celebrations, workplace moments, and stories from your organization.</p></div><span className="organization-posts-badge"><Clapperboard size={16} /> Company life</span></header>
+    {!isVerified && <p className="integration-notice">Your organization must be verified before you can publish posts and clips.</p>}
+    <form className="organization-post-composer" onSubmit={publishPost}>
+      <label htmlFor="organization-post-caption">Write a company update</label>
+      <textarea id="organization-post-caption" value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={2000} rows="4" placeholder="Tell candidates about a team milestone, celebration, or a day at work…" />
+      <div className="organization-post-composer-footer">
+        <div className="organization-post-attachment">
+          <label className="subtle-button file-upload-button"><ImagePlus size={15} /> {mediaFile ? mediaFile.name : 'Add a photo or clip'}<input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={chooseMedia} disabled={busy || !isVerified} /></label>
+          {mediaFile && <button type="button" className="text-button" onClick={() => setMediaFile(null)} disabled={busy}>Remove attachment</button>}
+          <small>JPG, PNG, WebP up to 5 MB · MP4 or WebM clips up to 25 MB</small>
+        </div>
+        <button type="submit" className="green-button" disabled={busy || !isVerified}>{busy ? 'Publishing…' : 'Share with candidates'} <ArrowRight size={14} /></button>
+      </div>
+      {error && <p className="auth-error" role="alert">{error}</p>}
+    </form>
+    <div className="organization-post-list">
+      {!posts.length && <div className="company-life-empty"><Camera size={26} /><h3>Your company feed starts here</h3><p>Publish your first photo, clip, or story for candidates.</p></div>}
+      {posts.map((post) => <article className="organization-post-card" key={post._id}>
+        <div className="organization-post-card-header">
+          <div><strong>{dateLabel(post.createdAt)}</strong><span>{post.commentCount} comment{post.commentCount === 1 ? '' : 's'}</span></div>
+          <button type="button" className="org-action-button org-remove-button" onClick={() => deletePost(post)} disabled={Boolean(deletingPost)}>{deletingPost === post._id ? 'Deleting…' : <><Trash2 size={14} /> Delete post</>}</button>
+        </div>
+        {post.caption && <p className="company-life-caption">{post.caption}</p>}
+        {post.mediaType && <div className="company-life-media">
+          {post.mediaType.startsWith('video/')
+            ? <video controls preload="metadata" src={`/api/company-posts/${post._id}/media`}>Your browser does not support video playback.</video>
+            : <img src={`/api/company-posts/${post._id}/media`} alt={`Photo shared by ${company?.name}`} loading="lazy" />}
+        </div>}
+        <div className="company-life-comments organization-post-comments">
+          {!post.comments?.length && <p>No candidate comments yet.</p>}
+          {post.comments?.map((comment) => <div className="company-life-comment" key={comment._id}>
+            <UserAvatar name={comment.author?.name} picture={comment.author?.picture} />
+            <div className="company-life-comment-body"><strong>{comment.author?.name || 'Candidate'}</strong><p>{comment.content}</p><div className="company-life-comment-actions"><button type="button" className="text-button" onClick={() => deletePostComment(post, comment)} disabled={Boolean(deletingComment)}>{deletingComment === comment._id ? 'Deleting…' : 'Delete comment'}</button></div></div>
+          </div>)}
+          {post.commentCount > post.comments?.length && <p className="organization-post-comments-note">Showing the latest {post.comments.length} of {post.commentCount} comments.</p>}
+        </div>
+      </article>)}
+    </div>
+  </section>
+}
+
 function CompanyProfile({ company, onSaved }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [imageBusy, setImageBusy] = useState({ logo: false, banner: false })
+  const [imageError, setImageError] = useState('')
+
+  async function uploadCompanyImage(asset, event) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+    setImageBusy((current) => ({ ...current, [asset]: true }))
+    setImageError('')
+    try {
+      const body = new FormData()
+      body.set('image', file)
+      await api(`/recruiter/company/assets/${asset}`, { method: 'POST', body })
+      await onSaved()
+    } catch (uploadError) {
+      setImageError(uploadError.message)
+    } finally {
+      setImageBusy((current) => ({ ...current, [asset]: false }))
+    }
+  }
+
+  async function deleteCompanyImage(asset) {
+    setImageBusy((current) => ({ ...current, [asset]: true }))
+    setImageError('')
+    try {
+      await api(`/recruiter/company/assets/${asset}`, { method: 'DELETE' })
+      await onSaved()
+    } catch (deleteError) {
+      setImageError(deleteError.message)
+    } finally {
+      setImageBusy((current) => ({ ...current, [asset]: false }))
+    }
+  }
 
   async function save(event) {
     event.preventDefault()
@@ -2125,6 +2529,35 @@ function CompanyProfile({ company, onSaved }) {
     }
   }
   return <section className="module-section"><div className="module-heading"><div><h2>Organization profile</h2><p>Keep your organization information up to date. Verification status is managed by the platform team.</p></div></div>{company && <form className="module-form" onSubmit={save}>
+    <div className="company-profile-assets">
+      <div className="company-profile-banner">
+        {company.bannerKey
+          ? <img src={`/api/recruiter/company/assets/banner?v=${encodeURIComponent(company.bannerKey)}`} alt={`${company.name} cover`} />
+          : <span>Add a cover image to showcase your organization</span>}
+      </div>
+      <div className="company-profile-branding">
+        <div className="company-profile-logo" aria-label="Company logo preview">
+          {company.logoKey
+            ? <img src={`/api/recruiter/company/assets/logo?v=${encodeURIComponent(company.logoKey)}`} alt={`${company.name} logo`} />
+            : <Building2 size={26} aria-hidden="true" />}
+        </div>
+        <div className="company-profile-image-controls">
+          <div><strong>Company logo</strong><small>JPG, PNG, or WebP · Maximum 5 MB</small></div>
+          <div className="company-profile-image-actions">
+            <label className="subtle-button file-upload-button">{imageBusy.logo ? 'Uploading…' : company.logoKey ? 'Change logo' : 'Upload logo'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadCompanyImage('logo', event)} disabled={imageBusy.logo || imageBusy.banner} /></label>
+            {company.logoKey && <button type="button" className="subtle-button" onClick={() => deleteCompanyImage('logo')} disabled={imageBusy.logo || imageBusy.banner}>{imageBusy.logo ? 'Removing…' : <><Trash2 size={14} /> Delete</>}</button>}
+          </div>
+        </div>
+        <div className="company-profile-image-controls company-profile-banner-controls">
+          <div><strong>Cover image</strong><small>JPG, PNG, or WebP · Maximum 5 MB</small></div>
+          <div className="company-profile-image-actions">
+            <label className="subtle-button file-upload-button">{imageBusy.banner ? 'Uploading…' : company.bannerKey ? 'Change cover' : 'Upload cover'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadCompanyImage('banner', event)} disabled={imageBusy.banner || imageBusy.logo} /></label>
+            {company.bannerKey && <button type="button" className="subtle-button" onClick={() => deleteCompanyImage('banner')} disabled={imageBusy.logo || imageBusy.banner}>{imageBusy.banner ? 'Removing…' : <><Trash2 size={14} /> Delete</>}</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+    {imageError && <p className="auth-error" role="alert">{imageError}</p>}
     <label>Organization name<input name="name" defaultValue={company.name || ''} required /></label>
     <div className="form-two-col"><label>Contact email<input name="contactEmail" type="email" defaultValue={company.contactEmail || ''} required /></label><label>Website<input name="website" type="url" defaultValue={company.website || ''} /></label></div>
     <div className="form-two-col"><label>Industry<input name="industry" defaultValue={company.industry || ''} /></label><label>Company size<input name="size" defaultValue={company.size || ''} /></label></div>
@@ -2262,5 +2695,54 @@ export function JobDetailsPage() {
 
   if (error) return <div className="job-details-page"><button className="text-button" type="button" onClick={() => navigate(-1)}>← Back</button><ErrorNotice message={error} /></div>
   if (!job) return <Loading message="Loading job details…" />
-  return <main className="job-details-page"><button className="text-button" type="button" onClick={() => navigate(-1)}>← Back to jobs</button><article className="job-details-card"><div className="job-details-head"><div className="company-avatar">{job.company?.name?.slice(0, 1)}</div><div><h1>{job.title}</h1><p>{job.company?.name} · {job.location}</p></div><Pill>{job.workMode}</Pill></div><div className="job-details-meta"><span>{humanize(job.employmentType)}</span><span>{job.experienceLevel || 'Experience flexible'}</span>{job.salaryMin && <span>{job.currency} {job.salaryMin.toLocaleString()}–{job.salaryMax?.toLocaleString()}</span>}</div><section><h2>About the role</h2><p>{job.description}</p></section>{job.responsibilities?.length > 0 && <section><h2>What you’ll do</h2><ul>{job.responsibilities.map((item) => <li key={item}>{item}</li>)}</ul></section>}{job.qualifications?.length > 0 && <section><h2>What we’re looking for</h2><ul>{job.qualifications.map((item) => <li key={item}>{item}</li>)}</ul></section>}<section><h2>Skills</h2><div className="setting-tags">{job.skills?.map((skill) => <span className="master-option" key={skill}>{skill}</span>)}</div></section>{error && <ErrorNotice message={error} />}{showApplyForm && <form id="job-application-form" className="application-form" onSubmit={(event) => { event.preventDefault(); apply() }}><label>Cover letter <small>Optional</small><textarea name="coverLetter" rows="5" maxLength="5000" placeholder="Tell the hiring team why this role interests you…" /></label><label>Use an alternate resume <small>Optional · PDF or DOCX, up to 5 MB. Your saved resume will be used if you leave this blank.</small><input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setResume(event.target.files?.[0] || null)} /></label><button className="green-button" disabled={busy}>{busy ? 'Submitting…' : 'Submit application'} <ArrowRight size={14} /></button></form>}<div className="job-detail-actions">{user?.role === 'candidate' && <button type="button" className="subtle-button" onClick={save}>{saved ? 'Saved' : 'Save job'}</button>}{user?.role === 'candidate' && !showApplyForm && <button type="button" className="green-button" onClick={() => setShowApplyForm(true)}>Apply now <ArrowRight size={14} /></button>}</div>{user?.role === 'candidate' && <JobReportForm jobId={job._id} />}</article></main>
+  return <main className="job-details-page"><button className="text-button" type="button" onClick={() => navigate(-1)}>← Back to jobs</button><article className="job-details-card"><div className="job-details-head"><div className="company-avatar">{job.company?.logoKey
+    ? <img src={`/api/companies/${job.company._id}/assets/logo?v=${encodeURIComponent(job.company.logoKey)}`} alt="" />
+    : job.company?.name?.slice(0, 1)}</div><div><h1>{job.title}</h1>{job.company?._id
+      ? <button type="button" className="job-company-link" onClick={() => navigate(`/companies/${job.company._id}`)}>{job.company.name}</button>
+      : <p>{job.company?.name}</p>}<p>{job.location}</p></div><Pill>{job.workMode}</Pill></div><div className="job-details-meta"><span>{humanize(job.employmentType)}</span><span>{job.experienceLevel || 'Experience flexible'}</span>{job.salaryMin && <span>{job.currency} {job.salaryMin.toLocaleString()}–{job.salaryMax?.toLocaleString()}</span>}</div><section><h2>About the role</h2><p>{job.description}</p></section>{job.responsibilities?.length > 0 && <section><h2>What you’ll do</h2><ul>{job.responsibilities.map((item) => <li key={item}>{item}</li>)}</ul></section>}{job.qualifications?.length > 0 && <section><h2>What we’re looking for</h2><ul>{job.qualifications.map((item) => <li key={item}>{item}</li>)}</ul></section>}<section><h2>Skills</h2><div className="setting-tags">{job.skills?.map((skill) => <span className="master-option" key={skill}>{skill}</span>)}</div></section>{job.company && <section className="job-company-summary"><h2>About {job.company.name}</h2><div className="job-company-facts">{job.company.industry && <span>Industry: {job.company.industry}</span>}{job.company.size && <span>Company size: {job.company.size}</span>}{job.company.location && <span>Location: {job.company.location}</span>}</div><p>{job.company.description || 'This organization has not added a company description yet.'}</p>{job.company.website && <a className="job-company-website" href={job.company.website} target="_blank" rel="noreferrer">Visit company website <ExternalLink size={13} /></a>}{job.company._id && <button type="button" className="subtle-button" onClick={() => navigate(`/companies/${job.company._id}`)}>View full company profile <ArrowRight size={14} /></button>}</section>}{error && <ErrorNotice message={error} />}{showApplyForm && <form id="job-application-form" className="application-form" onSubmit={(event) => { event.preventDefault(); apply() }}><label>Cover letter <small>Optional</small><textarea name="coverLetter" rows="5" maxLength="5000" placeholder="Tell the hiring team why this role interests you…" /></label><label>Use an alternate resume <small>Optional · PDF or DOCX, up to 5 MB. Your saved resume will be used if you leave this blank.</small><input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setResume(event.target.files?.[0] || null)} /></label><button className="green-button" disabled={busy}>{busy ? 'Submitting…' : 'Submit application'} <ArrowRight size={14} /></button></form>}<div className="job-detail-actions">{user?.role === 'candidate' && <button type="button" className="subtle-button" onClick={save}>{saved ? 'Saved' : 'Save job'}</button>}{user?.role === 'candidate' && !showApplyForm && <button type="button" className="green-button" onClick={() => setShowApplyForm(true)}>Apply now <ArrowRight size={14} /></button>}</div>{user?.role === 'candidate' && <JobReportForm jobId={job._id} />}</article></main>
+}
+
+export function CompanyDetailsPage() {
+  const { companyId } = useParams()
+  const navigate = useNavigate()
+  const [companyResult, setCompanyResult] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    api(`/companies/${companyId}`)
+      .then(({ company }) => { if (active) setCompanyResult({ companyId, company }) })
+      .catch((error) => { if (active) setCompanyResult({ companyId, error: error.message }) })
+    return () => { active = false }
+  }, [companyId])
+
+  const currentResult = companyResult?.companyId === companyId ? companyResult : null
+  if (currentResult?.error) return <div className="job-details-page"><button className="text-button" type="button" onClick={() => navigate(-1)}>← Back</button><ErrorNotice message={currentResult.error} /></div>
+  if (!currentResult?.company) return <Loading message="Loading company profile…" />
+  const { company } = currentResult
+
+  return <main className="job-details-page company-details-page">
+    <button className="text-button" type="button" onClick={() => navigate(-1)}>← Back</button>
+    <article className="job-details-card company-details-card">
+      <div className="company-public-banner">
+        {company.bannerKey
+          ? <img src={`/api/companies/${company._id}/assets/banner?v=${encodeURIComponent(company.bannerKey)}`} alt={`${company.name} cover`} />
+          : <span>Company profile</span>}
+      </div>
+      <header className="company-public-heading">
+        <div className="company-public-logo">
+          {company.logoKey
+            ? <img src={`/api/companies/${company._id}/assets/logo?v=${encodeURIComponent(company.logoKey)}`} alt={`${company.name} logo`} />
+            : <Building2 size={30} aria-hidden="true" />}
+        </div>
+        <div><h1>{company.name}</h1><p>{[company.industry, company.location].filter(Boolean).join(' · ') || 'Verified organization'}</p></div>
+      </header>
+      <div className="job-details-meta">
+        {company.size && <span>Company size: {company.size}</span>}
+        {company.industry && <span>{company.industry}</span>}
+        {company.location && <span>{company.location}</span>}
+      </div>
+      <section><h2>About the company</h2><p>{company.description || 'This organization has not added a company description yet.'}</p></section>
+      {company.website && <a className="job-company-website" href={company.website} target="_blank" rel="noreferrer">Visit company website <ExternalLink size={13} /></a>}
+    </article>
+  </main>
 }

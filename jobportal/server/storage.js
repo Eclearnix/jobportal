@@ -22,6 +22,21 @@ export async function savePrivateFile(file, prefix) {
   return upload.id.toString()
 }
 
+export async function deletePrivateFile(key) {
+  if (!mongoose.mongo.ObjectId.isValid(key)) {
+    const error = new Error('File not found.')
+    error.status = 404
+    throw error
+  }
+  const db = mongoose.connection.db
+  if (!db) throw new Error('MongoDB is not connected.')
+  const id = new mongoose.mongo.ObjectId(key)
+  const file = await db.collection(`${bucketName}.files`).findOne({ _id: id })
+  if (!file) return false
+  await getBucket().delete(id)
+  return true
+}
+
 export async function streamPrivateFile(key, res) {
   if (!mongoose.mongo.ObjectId.isValid(key)) {
     const error = new Error('Resume file not found.')

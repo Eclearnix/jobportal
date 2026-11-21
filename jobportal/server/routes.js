@@ -22,7 +22,7 @@ import {
 } from './models/index.js'
 import { requireCompanyMember, requirePrimaryAdmin, requireRoles, requireUser } from './middleware/auth.js'
 import { deletePrivateFile, savePrivateFile, streamPrivateFile } from './storage.js'
-import { sendCompanyInvitationEmail, sendInterviewEmail } from './email.js'
+import { sendCompanyInvitationEmail, sendInterviewEmail, sendRecruiterNotificationEmail } from './email.js'
 import {
   normalizeCandidateNotificationPreferences,
   normalizeRecruiterNotificationPreferences,
@@ -34,6 +34,45 @@ const router = Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 const primaryAdminEmail = process.env.PRIMARY_ADMIN_EMAIL?.trim().toLowerCase() || null
 const notificationChannelInput = z.object({ inApp: z.boolean(), email: z.boolean() }).strict()
+
+export function calculateProfileStrength(profile) {
+  if (!profile) return 0
+
+  const hasText = (value) => typeof value === 'string' && value.trim().length > 0
+  const hasItems = (value) => Array.isArray(value) && value.some((item) => {
+    if (typeof item === 'string') return item.trim().length > 0
+    if (!item) return false
+    const normalized = typeof item.toObject === 'function' ? item.toObject() : item
+    return Object.entries(normalized).some(([key, field]) => {
+      if (key === '_id' || key === '__v') return false
+      if (typeof field === 'string') return field.trim().length > 0
+      if (typeof field === 'number') return field > 0
+      return false
+    })
+  })
+
+  const fields = [
+    hasText(profile.name),
+    hasText(profile.title),
+    hasText(profile.about),
+    hasText(profile.profilePhotoKey) || hasText(profile.picture),
+    hasText(profile.profileBannerKey),
+    hasText(profile.phone),
+    hasText(profile.location),
+    hasItems(profile.skills),
+    hasItems(profile.education),
+    hasItems(profile.experience),
+    hasText(profile.resumeKey),
+    hasItems(profile.preferredLocations),
+    hasText(profile.portfolioUrl),
+    hasItems(profile.projects),
+    hasItems(profile.certifications),
+    hasItems(profile.codingProfiles),
+  ]
+
+  return Math.round(fields.filter(Boolean).length / fields.length * 100)
+}
+
 const recruiterNotificationPreferencesInput = z.object({
   applicationReceived: notificationChannelInput,
   interviewUpdates: notificationChannelInput,
@@ -142,6 +181,16 @@ function getRecruiterNotificationsUrl(req) {
   const origin = req.get('origin') || process.env.CLIENT_ORIGIN?.split(',')[0]
   try {
     const url = new URL('/organization/notifications', origin)
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
+  } catch {
+    return ''
+  }
+}
+
+function getCandidateApplicationsUrl(req) {
+  const origin = req.get('origin') || process.env.CLIENT_ORIGIN?.split(',')[0]
+  try {
+    const url = new URL('/candidate/applications', origin)
     return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
   } catch {
     return ''
@@ -377,6 +426,13 @@ router.patch('/recruiter/notifications/:notificationId/read', requireUser, requi
   const notification = await Notification.findOneAndUpdate({ _id: id, user: req.user._id }, { readAt: new Date() }, { new: true })
   if (!notification) return res.status(404).json({ error: 'Notification not found.' })
   res.json({ notification })
+})
+
+router.delete('/recruiter/notifications/:notificationId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const id = validate(objectId, req.params.notificationId)
+  const result = await Notification.deleteOne({ _id: id, user: req.user._id })
+  if (!result.deletedCount) return res.status(404).json({ error: 'Notification not found.' })
+  res.status(204).end()
 })
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'A valid resource ID is required.')
@@ -1125,8 +1181,7 @@ router.get('/dashboard/candidate', requireUser, requireRoles('candidate'), async
     Job.find({ status: 'published', ...(req.user.skills?.length ? { skills: { $in: req.user.skills } } : {}) }).sort({ publishedAt: -1 }).limit(4).populate('company', 'name location').lean(),
     Notification.countDocuments({ user: req.user._id, readAt: null, archivedAt: null }),
   ])
-  const profileFields = [profile?.phone, profile?.location, profile?.skills?.length, profile?.education?.length, profile?.experience?.length, profile?.resumeKey]
-  const profileStrength = Math.round(profileFields.filter(Boolean).length / profileFields.length * 100)
+  const profileStrength = calculateProfileStrength(profile)
   res.json({
     summary: { applicationsSent, profileViews: profile.profileViews, interviews, unreadNotifications, profileStrength },
     recentApplications,
@@ -1770,16 +1825,115 @@ router.patch('/recruiter/applications/:applicationId/archive', requireUser, requ
   res.status(204).end()
 })
 
+router.delete('/recruiter/applications/:applicationId', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
+  const id = validate(objectId, req.params.applicationId)
+  let applicationDeleted = false
+  let resumeKey = ''
+  const session = await mongoose.startSession()
+  try {
+    await session.withTransaction(async () => {
+      applicationDeleted = false
+      resumeKey = ''
+      const application = await Application.findOne({ _id: id, company: req.company._id })
+        .select('resumeKey')
+        .session(session)
+      if (!application) return
+
+      resumeKey = application.resumeKey
+      const interviews = await Interview.find({ application: id, company: req.company._id })
+        .select('_id')
+        .session(session)
+        .lean()
+      const notificationFilters = [{
+        relatedId: id,
+        type: { $in: ['application_submitted', 'application_status', 'application_received'] },
+      }]
+      if (interviews.length) {
+        notificationFilters.push({
+          relatedId: { $in: interviews.map((interview) => interview._id) },
+          type: 'interview_scheduled',
+        })
+      }
+
+      await Notification.deleteMany({ $or: notificationFilters }, { session })
+      await Interview.deleteMany({ application: id, company: req.company._id }, { session })
+      const result = await Application.deleteOne({ _id: id, company: req.company._id }, { session })
+      applicationDeleted = result.deletedCount === 1
+    })
+  } finally {
+    await session.endSession()
+  }
+
+  if (!applicationDeleted) return res.status(404).json({ error: 'Application not found.' })
+
+  let storageWarning = ''
+  if (resumeKey) {
+    try {
+      const [candidateUsesResume, anotherApplicationUsesResume] = await Promise.all([
+        User.exists({ resumeKey }),
+        Application.exists({ resumeKey }),
+      ])
+      if (!candidateUsesResume && !anotherApplicationUsesResume) await deletePrivateFile(resumeKey)
+    } catch (error) {
+      console.error('Application was deleted, but its unreferenced resume file could not be removed:', error)
+      storageWarning = 'The application was deleted, but its resume file could not be checked or removed.'
+    }
+  }
+
+  res.json({ storageWarning })
+})
+
 router.patch('/recruiter/applications/:applicationId/status', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
   const id = validate(objectId, req.params.applicationId)
   const { status } = validate(z.object({ status: z.enum(['under_review', 'shortlisted', 'interview_scheduled', 'selected', 'rejected']) }), req.body)
-  const application = await Application.findOneAndUpdate({ _id: id, company: req.user.company, status: { $ne: 'withdrawn' } }, { status }, { new: true })
+  const previousApplication = await Application.findOneAndUpdate(
+    { _id: id, company: req.user.company, status: { $ne: 'withdrawn' } },
+    { status },
+  )
+  if (!previousApplication) return res.status(404).json({ error: 'Application not found.' })
+  const application = await Application.findById(previousApplication._id)
   if (!application) return res.status(404).json({ error: 'Application not found.' })
-  const candidate = await User.findById(application.candidate).select('candidateNotificationPreferences')
-  if (shouldSendCandidateNotification(candidate?.candidateNotificationPreferences, 'applicationUpdates')) {
+  const candidate = await User.findById(application.candidate).select('candidateNotificationPreferences name email')
+  if (previousApplication.status !== status && shouldSendCandidateNotification(candidate?.candidateNotificationPreferences, 'applicationUpdates')) {
     await Notification.create({ user: application.candidate, type: 'application_status', title: 'Application update', message: `Your application status changed to ${status.replaceAll('_', ' ')}.`, relatedId: application._id })
   }
-  res.json({ application })
+
+  if (status !== 'rejected') return res.json({ application })
+
+  const alreadyRejected = previousApplication.status === 'rejected'
+  let emailResult = { sent: false, error: '' }
+  if (!alreadyRejected) {
+    try {
+      const job = await Job.findById(application.job).select('title')
+      if (!candidate?.email) {
+        emailResult.error = 'The candidate email address could not be found.'
+      } else if (!job?.title) {
+        emailResult.error = 'The job details could not be found, so the rejection email was not sent.'
+      } else {
+        emailResult = await sendRecruiterNotificationEmail({
+          to: candidate.email,
+          companyName: req.company.name,
+          subject: `Update on your application for ${job.title}`,
+          message: `Hello ${candidate.name || 'there'},\n\nThank you for applying for ${job.title} at ${req.company.name}. After careful consideration, we have decided to move forward with other candidates for this position.\n\nWe appreciate your time and interest, and wish you the best in your job search.`,
+          loginUrl: getCandidateApplicationsUrl(req),
+        })
+      }
+    } catch (error) {
+      console.error('Candidate rejection email delivery failed:', error)
+      emailResult.error = 'The application was rejected, but the email could not be sent. Please check the server logs.'
+    }
+    if (!emailResult.sent) {
+      if (!emailResult.error) emailResult.error = 'Email delivery failed.'
+      console.error(`Candidate rejection email was not sent: ${emailResult.error}`)
+    }
+  }
+
+  res.json({
+    application,
+    emailSent: emailResult.sent,
+    emailError: emailResult.error,
+    alreadyRejected,
+  })
 })
 
 router.post('/recruiter/applications/:applicationId/interviews', requireUser, requireRoles('recruiter'), requireCompanyMember, async (req, res) => {
@@ -2017,6 +2171,17 @@ router.put('/admin/settings/:key', requireUser, requireRoles('super_admin'), asy
 router.get('/admin/notifications', requireUser, requireRoles('super_admin'), async (_req, res) => {
   const items = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50).lean()
   res.json({ items })
+})
+
+router.patch('/admin/notifications/:notificationId/read', requireUser, requireRoles('super_admin'), async (req, res) => {
+  const id = validate(objectId, req.params.notificationId)
+  const notification = await Notification.findOneAndUpdate(
+    { _id: id, user: req.user._id },
+    { readAt: new Date() },
+    { new: true },
+  )
+  if (!notification) return res.status(404).json({ error: 'Notification not found.' })
+  res.json({ notification })
 })
 
 router.get('/admin/applications', requireUser, requireRoles('super_admin'), async (req, res) => {

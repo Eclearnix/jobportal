@@ -8,15 +8,17 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api, queryString } from '../services/api'
+import FuseButton from '../components/FuseButton'
 import StaggeredMenu from '../components/StaggeredMenu'
+import ApplicationAnalytics from '../components/ApplicationAnalytics'
 
-function UserAvatar({ name, picture }) {
+function UserAvatar({ name, picture, status }) {
   const [imageFailed, setImageFailed] = useState(false)
   const pictureUrl = typeof picture === 'string' ? picture.trim() : ''
   const initial = name?.trim().charAt(0).toUpperCase() || '?'
 
   return (
-    <span className="user-avatar" role="img" aria-label={`${name || 'User'} profile picture`}>
+    <span className={`user-avatar${status ? ` user-avatar-status user-avatar-status-${status}` : ''}`} role="img" aria-label={`${name || 'User'} profile picture`}>
       {pictureUrl && !imageFailed
         ? <img src={pictureUrl} alt="" onError={() => setImageFailed(true)} />
         : initial}
@@ -28,7 +30,7 @@ const navigation = {
   candidate: [
     ['Overview', LayoutDashboard], ['Find Jobs', Search], ['My Applications', ClipboardList],
     ['Saved Jobs', BriefcaseBusiness], ['My Profile', UserRound], ['Resume', FileText],
-    ['Company Life', Camera], ['Interviews', BriefcaseBusiness], ['Notifications', Bell],
+    ['Organization Clips', Camera], ['Interviews', BriefcaseBusiness], ['Notifications', Bell],
   ],
   recruiter: [
     ['Overview', LayoutDashboard], ['Post a Job', BriefcaseBusiness], ['Manage Jobs', ClipboardList],
@@ -85,17 +87,58 @@ function MetricCards({ items }) {
   ))}</div>
 }
 
-function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here yet.', className = '' }) {
+function DataTable({ columns, rows, actions, search = '', empty = 'Nothing here yet.', className = '', animatedRows = false, onRowClick }) {
+  const tableBodyRef = useRef(null)
   const filteredRows = rows.filter((row) => row.cells.some((cell) => {
     const text = typeof cell === 'string' || typeof cell === 'number' ? String(cell) : String(cell?.props?.children || '')
     return text.toLowerCase().includes(search.toLowerCase())
   }))
+
+  useEffect(() => {
+    if (!animatedRows) return undefined
+    const tableRows = tableBodyRef.current?.querySelectorAll('tr[data-notification-row]')
+    if (!tableRows?.length) return undefined
+
+    if (!('IntersectionObserver' in window)) {
+      tableRows.forEach((row) => { row.dataset.notificationVisible = 'true' })
+      return undefined
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        entry.target.dataset.notificationVisible = 'true'
+        observer.unobserve(entry.target)
+      })
+    }, { threshold: 0.15 })
+    tableRows.forEach((row) => observer.observe(row))
+    return () => observer.disconnect()
+  }, [animatedRows, rows])
+
   return (
     <div className={`data-card ${className}`.trim()}>
       <div className="table-scroll"><table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}{actions && <th>Actions</th>}</tr></thead>
-        <tbody>
-          {filteredRows.length ? filteredRows.map((row) => (
-            <tr key={row.id || row._id}>
+        <tbody ref={tableBodyRef}>
+          {filteredRows.length ? filteredRows.map((row, index) => (
+            <tr
+              key={row.id || row._id}
+              data-notification-row={animatedRows ? '' : undefined}
+              data-clickable-notification={onRowClick ? '' : undefined}
+              style={animatedRows ? { '--notification-stagger': `${Math.min(index, 8) * 45}ms` } : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              aria-haspopup={onRowClick ? 'dialog' : undefined}
+              aria-label={onRowClick ? `Open ${row.resource?.title || 'notification'}` : undefined}
+              onClick={(event) => {
+                if (!onRowClick) return
+                if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea')) return
+                onRowClick(row.resource || row)
+              }}
+              onKeyDown={(event) => {
+                if (!onRowClick || event.target !== event.currentTarget || !['Enter', ' '].includes(event.key)) return
+                event.preventDefault()
+                onRowClick(row.resource || row)
+              }}
+            >
               {row.cells.map((cell, index) => <td key={`${row.id || row._id}-${index}`}>{cell}</td>)}
               {actions && <td className="table-actions">{actions(row)}</td>}
             </tr>
@@ -630,7 +673,7 @@ function JobPostForm({ onCreated }) {
 
   return (
     <section className="module-section">
-      <div className="module-heading"><div><h2>Create a job listing</h2><p>Write a clear, thoughtful description to help candidates decide if this role is right for them.</p></div></div>
+      <div className="module-heading"><div><p>Write a clear, thoughtful description to help candidates decide if this role is right for them.</p></div></div>
       <form className="module-form" onSubmit={submit}>
         <label>Job title<input name="title" required minLength={2} maxLength={180} placeholder="e.g. Product Designer" /></label>
         <div className="form-two-col">
@@ -1089,25 +1132,35 @@ function CandidateProfile({ profile, onSaved, onProfileSaveStart, onProfileSaved
           data-profile-tab="basic"
           hidden={activeProfileTab !== 'basic'}
         >
-          <div className="candidate-profile-section-heading"><div><strong id="candidate-general-heading">General information</strong><small>Your profile photo, banner, and professional details.</small></div><UserRound size={18} aria-hidden="true" /></div>
+          <div className="candidate-profile-section-heading">
+            <div><strong id="candidate-general-heading">General information</strong><small>Your profile photo, banner, and professional details.</small></div>
+            <div className="candidate-profile-heading-actions">
+              <label className="candidate-image-upload heading-image-upload">
+                {imageBusy.banner ? 'Uploading…' : <><ImagePlus size={14} /> {profile?.profileBannerKey ? 'Change banner' : 'Upload banner'}</>}
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectProfileBanner} disabled={imageBusy.banner} />
+              </label>
+              <label className="subtle-button file-upload-button">
+                {imageBusy.photo ? 'Uploading…' : 'Upload photo'}
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectProfilePhoto} disabled={imageBusy.photo} />
+              </label>
+            </div>
+          </div>
           <div className="candidate-profile-visual">
             <div className="candidate-profile-banner">
               {profile?.profileBannerKey
                 ? <img src={`/api/candidate/profile/assets/banner?v=${encodeURIComponent(profile.profileBannerKey)}`} alt="Profile banner" />
                 : <span>Add a banner to personalize your profile</span>}
-              <label className="candidate-image-upload">{imageBusy.banner ? 'Uploading…' : <><ImagePlus size={14} /> {profile?.profileBannerKey ? 'Change banner' : 'Upload banner'}</>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectProfileBanner} disabled={imageBusy.banner} /></label>
             </div>
             <div className="candidate-profile-photo-row">
               <UserAvatar name={profile?.name} picture={profile?.profilePhotoKey ? `/api/candidate/profile/assets/photo?v=${encodeURIComponent(profile.profilePhotoKey)}` : profile?.picture} />
               <div><strong>Profile photo</strong><small>JPG, PNG, or WebP · Maximum 5 MB</small></div>
-              <label className="subtle-button file-upload-button">{imageBusy.photo ? 'Uploading…' : 'Upload photo'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectProfilePhoto} disabled={imageBusy.photo} /></label>
             </div>
           </div>
           {imageError && <p className="auth-error" role="alert">{imageError}</p>}
           <label>Full name<input name="name" defaultValue={profile?.name} required maxLength={120} /></label>
           <label>Professional headline<input name="title" defaultValue={profile?.title} maxLength={120} /></label>
           <div className="form-two-col"><label>Phone<input name="phone" defaultValue={profile?.phone} maxLength={40} /></label><label>Location<input name="location" defaultValue={profile?.location} maxLength={120} /></label></div>
-          <label>About<textarea name="about" defaultValue={profile?.about} rows="5" maxLength={3000} placeholder="Share your background, strengths, and the kind of work you enjoy." /></label>
+          <label>About<textarea className="candidate-about-text" name="about" defaultValue={profile?.about} rows="5" maxLength={3000} placeholder="Share your background, strengths, and the kind of work you enjoy." /></label>
           <label>Skills<input name="skills" defaultValue={profile?.skills?.join(', ')} placeholder="Figma, Research, Prototyping" /></label>
           <label>Preferred locations<input name="preferredLocations" defaultValue={profile?.preferredLocations?.join(', ')} /></label>
           <label className="checkbox-field">
@@ -1347,7 +1400,7 @@ function CandidateResume({ profile, onSaved }) {
 
   return (
     <section className="module-section">
-      <div className="module-heading"><div><h2>Your resume</h2><p>Keep one current resume ready for every application.</p></div></div>
+      <div className="module-heading"><div><p>Keep one current resume ready for every application.</p></div></div>
       <div className="resume-manager resume-page-card">
         <div>
           <h3>{profile?.resumeKey ? 'Resume uploaded' : 'No resume uploaded yet'}</h3>
@@ -1561,7 +1614,7 @@ function OrganizationSettings({ settings, reload }) {
   return (
     <section className="module-section">
       <div className="module-heading">
-        <div><h2>Organization settings</h2><p>Choose your timezone and how you receive hiring updates.</p></div>
+        <div><p>Choose your timezone and how you receive hiring updates.</p></div>
       </div>
       <form className="module-form" onSubmit={saveTimezone}>
         <h3>Organization timezone</h3>
@@ -1575,7 +1628,7 @@ function OrganizationSettings({ settings, reload }) {
         <button type="submit" className="green-button" disabled={savingTimezone}>{savingTimezone ? 'Saving…' : 'Save timezone'} <ArrowRight size={14} /></button>
       </form>
 
-      <form className="module-form" onSubmit={saveNotifications}>
+      <form className="module-form organization-notification-settings" onSubmit={saveNotifications}>
         <h3>Notification preferences</h3>
         <p>These preferences apply to your HR account, not emails sent to applicants. Email alerts require Gmail SMTP to be configured on the server.</p>
         <div className="settings-notification-grid">
@@ -1623,9 +1676,11 @@ function DashboardWorkspace({ role }) {
   const [showRemovedApplications, setShowRemovedApplications] = useState(false)
   const [showArchivedNotifications, setShowArchivedNotifications] = useState(false)
   const [notificationActionsBusy, setNotificationActionsBusy] = useState(false)
+  const [selectedNotification, setSelectedNotification] = useState(null)
   const [toast, setToast] = useState(null)
   const [confirmation, setConfirmation] = useState(null)
   const loadSequence = useRef(0)
+  const archiveOperations = useRef(new Map())
   const toastTimer = useRef(null)
   const confirmationTimer = useRef(null)
   const [today] = useState(() => new Date())
@@ -1687,7 +1742,7 @@ function DashboardWorkspace({ role }) {
             'Saved Jobs': '/candidate/saved-jobs',
             'My Profile': '/dashboard/candidate',
             Resume: '/dashboard/candidate',
-            'Company Life': '/candidate/company-posts',
+            'Organization Clips': '/candidate/company-posts',
             Interviews: '/candidate/interviews',
             Notifications: `/candidate/notifications?archived=${showArchivedNotifications}`,
             Settings: '/candidate/settings',
@@ -1784,6 +1839,29 @@ function DashboardWorkspace({ role }) {
     setJobPostMessage('')
   }
 
+  const profileRoleLabel = role === 'candidate' ? 'Job seeker' : role === 'recruiter' ? 'Organization HR' : 'Administrator'
+  const profileMenuItems = role === 'candidate'
+    ? [
+        { label: 'Notifications', icon: <Bell size={16} />, onClick: () => goTo('Notifications') },
+        { label: 'View & update profile', icon: <UserRound size={16} />, onClick: () => goTo('My Profile') },
+        { label: 'Settings', icon: <Settings size={16} />, onClick: () => goTo('Settings') },
+        { label: 'Logout', icon: <LogOut size={16} />, onClick: async () => { await signOut(); navigate('/login', { replace: true }) } },
+      ]
+    : role === 'recruiter'
+      ? [
+          { label: 'Company profile', icon: <Building2 size={16} />, onClick: () => goTo('Company Profile') },
+          { label: 'Notifications', icon: <Bell size={16} />, onClick: () => goTo('Notifications') },
+          { label: 'Team management', icon: <Users size={16} />, onClick: () => goTo('Team Management') },
+          { label: 'Settings', icon: <Settings size={16} />, onClick: () => goTo('Settings') },
+          { label: 'Logout', icon: <LogOut size={16} />, onClick: async () => { await signOut(); navigate('/login', { replace: true }) } },
+        ]
+      : [
+          { label: 'Admin management', icon: <Users size={16} />, onClick: () => goTo('Admin Management') },
+          { label: 'Notifications', icon: <Bell size={16} />, onClick: () => goTo('Notifications') },
+          { label: 'Settings', icon: <Settings size={16} />, onClick: () => goTo('Settings') },
+          { label: 'Logout', icon: <LogOut size={16} />, onClick: async () => { await signOut(); navigate('/login', { replace: true }) } },
+        ]
+
   const mutate = async (operation) => {
     setActionError('')
     try {
@@ -1794,6 +1872,58 @@ function DashboardWorkspace({ role }) {
     }
   }
 
+  const rejectRecruiterApplication = async (applicationId, candidateName) => {
+    setActionError('')
+    setActionMessage('')
+    try {
+      const result = await api(`/recruiter/applications/${applicationId}/status`, {
+        method: 'PATCH',
+        body: { status: 'rejected' },
+      })
+      await reload()
+      if (result.alreadyRejected) {
+        setActionMessage('This application was already rejected; no duplicate email was sent.')
+      } else if (result.emailSent) {
+        setActionMessage(`Application rejected and an email was sent to ${candidateName}.`)
+      } else {
+        setActionMessage(`Application rejected, but the email was not sent. ${result.emailError || 'Check your email configuration.'}`)
+      }
+    } catch (operationError) {
+      setActionError(operationError.message)
+    }
+  }
+
+  const confirmRecruiterApplicationRejection = (row) => {
+    const candidateName = row.resource.candidate?.name || 'this candidate'
+    const jobTitle = row.resource.job?.title || 'this position'
+    const companyName = payload?.company?.name || 'your organization'
+    requestConfirmation(
+      `Reject ${candidateName}'s application for ${jobTitle} and email them that ${companyName} is moving forward with other candidates?`,
+      () => rejectRecruiterApplication(row.id, candidateName),
+    )
+  }
+
+  const deleteRecruiterApplication = async (applicationId) => {
+    setActionError('')
+    setActionMessage('')
+    try {
+      const result = await api(`/recruiter/applications/${applicationId}`, { method: 'DELETE' })
+      await reload()
+      setActionMessage(result.storageWarning || 'Application, related interviews, and notifications were permanently deleted.')
+    } catch (operationError) {
+      setActionError(operationError.message)
+    }
+  }
+
+  const confirmRecruiterApplicationDeletion = (row) => {
+    const candidateName = row.resource.candidate?.name || 'this candidate'
+    const jobTitle = row.resource.job?.title || 'this position'
+    requestConfirmation(
+      `Permanently delete ${candidateName}'s application for ${jobTitle}? Related interviews and application notifications will also be deleted. The candidate account and job will remain. This cannot be undone.`,
+      () => deleteRecruiterApplication(row.id),
+    )
+  }
+
   const runNotificationMutation = async (operation) => {
     setNotificationActionsBusy(true)
     try {
@@ -1801,6 +1931,80 @@ function DashboardWorkspace({ role }) {
     } finally {
       setNotificationActionsBusy(false)
     }
+  }
+
+  const runSelectedNotificationAction = async (operation, { close = false, markRead = false } = {}) => {
+    setNotificationActionsBusy(true)
+    setActionError('')
+    try {
+      await operation()
+      if (close) setSelectedNotification(null)
+      if (markRead) setSelectedNotification((current) => current
+        ? { ...current, readAt: new Date().toISOString() }
+        : current)
+      await reload({ quiet: true })
+    } catch (operationError) {
+      setActionError(operationError.message)
+    } finally {
+      setNotificationActionsBusy(false)
+    }
+  }
+
+  const getNotificationDestination = (notification) => {
+    if (role === 'candidate') {
+      if (notification.type === 'job_invitation' && notification.relatedId) {
+        return { label: 'View job', path: `/jobs/${notification.relatedId}` }
+      }
+      if (notification.type === 'interview_scheduled') return { label: 'View interviews', path: `${paths.candidate}/interviews` }
+      if (['application_submitted', 'application_status'].includes(notification.type)) {
+        return { label: 'View applications', path: `${paths.candidate}/applications` }
+      }
+    }
+    if (role === 'recruiter') {
+      if (notification.type === 'application_received') return { label: 'View applications', path: `${paths.recruiter}/applications` }
+      if (notification.type === 'interview_scheduled') return { label: 'View interviews', path: `${paths.recruiter}/interviews` }
+      if (notification.type === 'team_member_joined') return { label: 'View team', path: `${paths.recruiter}/team-management` }
+    }
+    return null
+  }
+
+  const openNotificationDestination = (notification) => {
+    const destination = getNotificationDestination(notification)
+    if (!destination) return
+    setSelectedNotification(null)
+    navigate(destination.path)
+  }
+
+  const runArchiveOperation = (key, operation) => {
+    const previous = archiveOperations.current.get(key) || Promise.resolve()
+    const current = previous.catch(() => {}).then(operation)
+    archiveOperations.current.set(key, current)
+    return current.finally(() => {
+      if (archiveOperations.current.get(key) === current) archiveOperations.current.delete(key)
+    })
+  }
+
+  const updateCandidateNotificationArchive = (notificationId, archived) => {
+    setActionError('')
+    setNotificationActionsBusy(true)
+    void runArchiveOperation(`candidate-notification-${notificationId}`, () => api(
+      `/candidate/notifications/${notificationId}/archive`,
+      { method: 'PATCH', body: { archived } },
+    )).catch((operationError) => setActionError(operationError.message))
+      .finally(() => setNotificationActionsBusy(archiveOperations.current.size > 0))
+  }
+
+  const updateRecruiterApplicationArchive = (applicationId, archived) => {
+    setActionError('')
+    void runArchiveOperation(`recruiter-application-${applicationId}`, () => api(
+      `/recruiter/applications/${applicationId}/archive`,
+      { method: 'PATCH', body: { archived } },
+    )).catch((operationError) => setActionError(operationError.message))
+  }
+
+  const reloadAfterArchive = (key) => {
+    const pending = archiveOperations.current.get(key)
+    void (pending ? pending.catch(() => {}) : Promise.resolve()).then(() => reload())
   }
 
   const inspectCandidate = async (candidateId, canInvite = false) => {
@@ -1919,14 +2123,9 @@ function DashboardWorkspace({ role }) {
         {!row.resource.readAt && <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => isCandidate
           ? runNotificationMutation(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))
           : mutate(() => api(`${notificationBase}/notifications/${row.id}/read`, { method: 'PATCH' }))}>Mark read</button>}
-        {!isCandidate && row.resource.readAt && !isJobInvitation && 'Read'}
-        {isCandidate && <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => runNotificationMutation(() => api(`/candidate/notifications/${row.id}/archive`, { method: 'PATCH', body: { archived: !showArchivedNotifications } }))}>{showArchivedNotifications ? 'Restore' : 'Archive'}</button>}
-        {isCandidate && <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={() => requestConfirmation(
-          'Permanently delete this notification?',
-          () => runNotificationMutation(() => api(`/candidate/notifications/${row.id}`, { method: 'DELETE' })),
-        )}>Delete</button>}
+        {!isCandidate && row.resource.readAt && !isJobInvitation && <span className="notification-read-status">Read</span>}
       </div>
-    }} empty={isCandidate && showArchivedNotifications ? 'No archived notifications.' : 'You’re all caught up.'} className={isCandidate ? 'candidate-notification-table' : ''} />
+    }} empty={isCandidate && showArchivedNotifications ? 'No archived notifications.' : 'You’re all caught up.'} className={`notification-animated-list ${isCandidate ? 'candidate-notification-table' : isRecruiter ? 'recruiter-notification-table' : ''}`} animatedRows onRowClick={setSelectedNotification} />
   } else if (isRecruiter && ['Manage Jobs', 'Applications', 'Candidates'].includes(activePage)) {
     const rows = activePage === 'Manage Jobs'
       ? (viewData?.items || []).map((job) => ({
@@ -1965,11 +2164,47 @@ function DashboardWorkspace({ role }) {
         : activePage === 'Candidates'
           ? <div className="application-actions"><button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate._id)}>View profile</button>{row.resource.applications[0] && <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.resource.applications[0].id)}>Resume</button>}</div>
           : <div className="application-actions">
-            {!showArchivedApplications && <select className="application-status-select" aria-label={`Update status for ${row.resource.candidate?.name}`} defaultValue={row.resource.status} onChange={(event) => mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status: event.target.value } }))}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option><option value="rejected">Rejected</option></select>}
+            {!showArchivedApplications && <select className="application-status-select" aria-label={`Update status for ${row.resource.candidate?.name}`} value={row.resource.status} onChange={(event) => {
+              const status = event.target.value
+              if (status === 'rejected') confirmRecruiterApplicationRejection(row)
+              else void mutate(() => api(`/recruiter/applications/${row.id}/status`, { method: 'PATCH', body: { status } }))
+            }}><option value="submitted" disabled>Submitted</option><option value="under_review">Under review</option><option value="shortlisted">Shortlisted</option><option value="interview_scheduled">Interview scheduled</option><option value="selected">Selected</option>{row.resource.status === 'withdrawn' && <option value="withdrawn" disabled>Withdrawn</option>}<option value="rejected">Rejected</option></select>}
             <button type="button" className="org-action-button" onClick={() => inspectCandidate(row.resource.candidate?._id)}>View profile</button>
             <button type="button" className="org-action-button" onClick={() => openApplicationResume(row.id)}>Resume</button>
             {!showArchivedApplications && <ScheduleInterviewForm applicationId={row.id} onSaved={reload} onScheduled={setActionMessage} />}
-            <button type="button" className="org-action-button" aria-label={`${showArchivedApplications ? 'Restore' : 'Archive'} application for ${row.resource.candidate?.name || 'candidate'}`} onClick={() => mutate(() => api(`/recruiter/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: !showArchivedApplications } }))}>{showArchivedApplications ? 'Restore' : 'Archive'}</button>
+            {showArchivedApplications
+              ? <button type="button" className="org-action-button" aria-label={`Restore application for ${row.resource.candidate?.name || 'candidate'}`} onClick={() => mutate(() => api(`/recruiter/applications/${row.id}/archive`, { method: 'PATCH', body: { archived: false } }))}>Restore</button>
+              : <>
+              {row.resource.status !== 'withdrawn' && <button
+                type="button"
+                className="org-action-button org-remove-button"
+                disabled={row.resource.status === 'rejected'}
+                onClick={() => confirmRecruiterApplicationRejection(row)}
+              >{row.resource.status === 'rejected' ? 'Rejected' : 'Reject'}</button>}
+              <FuseButton
+                className="archive-fuse-button"
+                label="Archive"
+                doneLabel="Archived"
+                undoLabel="Undo"
+                color="var(--aurora-secondary-text)"
+                background="var(--aurora-elevated)"
+                fuseColor="var(--aurora-secondary)"
+                size="md"
+                radius={22}
+                undoWindow={4000}
+                fuse="outline"
+                commitOn="press"
+                settle="reset"
+                onCommit={() => updateRecruiterApplicationArchive(row.id, true)}
+                onUndo={() => updateRecruiterApplicationArchive(row.id, false)}
+                onFuseEnd={() => reloadAfterArchive(`recruiter-application-${row.id}`)}
+              /></>}
+            <button
+              type="button"
+              className="org-action-button org-remove-button"
+              aria-label={`Permanently delete application for ${row.resource.candidate?.name || 'candidate'}`}
+              onClick={() => confirmRecruiterApplicationDeletion(row)}
+            >Delete</button>
           </div>}
       empty={showArchivedApplications ? 'No archived applications.' : 'No records to show yet.'}
     />
@@ -2061,17 +2296,27 @@ function DashboardWorkspace({ role }) {
       </aside>
 
       <main className="dashboard-main">
-        <header className="dashboard-topbar"><div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div><div className="topbar-actions">{isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}{isCandidate && <button type="button" className="topbar-notification-button" aria-label="Open notifications" onClick={() => goTo('Notifications')}>{payload?.summary?.unreadNotifications > 0 && <span className="notification-unread-dot topbar-unread-dot" aria-hidden="true" />}<Bell className="topbar-notification-bell" size={20} /></button>}{isCandidate ? <StaggeredMenu
-          className="profile-staggered-menu"
-          displayItemNumbering={false}
-          trigger={<><UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></>}
-          items={[
-            { label: 'Recruiter actions', icon: <Users size={16} />, onClick: () => goTo('Notifications') },
-            { label: 'View & update profile', icon: <UserRound size={16} />, onClick: () => goTo('My Profile') },
-            { label: 'Settings', icon: <Settings size={16} />, onClick: () => goTo('Settings') },
-            { label: 'Logout', icon: <LogOut size={16} />, onClick: async () => { await signOut(); navigate('/login', { replace: true }) } },
-          ]}
-        /> : <><UserAvatar key={user.picture} name={user.name} picture={user.picture} /><strong className="profile-name">{user.name}</strong></>}</div></header>
+        <header className="dashboard-topbar">
+          <div className="breadcrumb"><span>Workspace</span><span>/</span><strong>{activePage}</strong></div>
+          <div className="topbar-actions">
+            {isAdmin && <label className="search-box"><Search size={15} /><input aria-label="Search this dashboard" placeholder="Search..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>}
+            {isCandidate && <button type="button" className="topbar-notification-button" aria-label="Open notifications" onClick={() => goTo('Notifications')}>{payload?.summary?.unreadNotifications > 0 && <span className="notification-unread-dot topbar-unread-dot" aria-hidden="true" />}<Bell className="topbar-notification-bell" size={20} /></button>}
+            <StaggeredMenu
+              className="profile-staggered-menu"
+              displayItemNumbering={false}
+              trigger={
+                <>
+                  <UserAvatar key={user.picture} name={user.name} picture={user.picture} status="online" />
+                  <span className="profile-label">
+                    <strong className="profile-name">{user.name}</strong>
+                    <small>{profileRoleLabel}</small>
+                  </span>
+                </>
+              }
+              items={profileMenuItems}
+            />
+          </div>
+        </header>
         <div className={`dashboard-content ${role === 'candidate' && activePage === 'My Profile' ? 'dashboard-profile-content' : ''}`}>
           <div className="dashboard-welcome"><div><div className="date-line">{today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div><h1>{title}</h1><p>{isAdmin ? 'Manage people, organizations, and the standards that make this marketplace trusted.' : isRecruiter ? `Your organization is ${payload?.company?.status || 'loading'} · see what needs your attention today.` : 'A thoughtful next step can bring the right opportunity closer.'}</p></div>
             {isCandidate && <button className="green-button" type="button" onClick={() => goTo('My Profile')}>Complete profile <ArrowRight size={14} /></button>}
@@ -2090,7 +2335,9 @@ function DashboardWorkspace({ role }) {
           {!loading && !error && activePage === 'Overview' && (
             <>
               <MetricCards items={metrics} />
-              {isCandidate && <div className="dashboard-lower">
+              {isCandidate && <ApplicationAnalytics />}
+              {isRecruiter && <ApplicationAnalytics role="recruiter" upcomingInterviews={payload?.summary?.interviews} />}
+              {isCandidate && <div className="dashboard-lower candidate-dashboard-lower">
                 <section className="data-card"><div className="card-heading"><div><h2>Recent applications</h2><p>Keep track of the roles you’ve applied for.</p></div><button className="subtle-button" type="button" onClick={() => goTo('My Applications')}>View all <ArrowRight size={13} /></button></div><DataTable columns={['Position', 'Organization', 'Status', 'Applied']} rows={(payload.recentApplications || []).map((item) => ({ id: item._id, cells: [item.job?.title, item.company?.name, <Pill key="status">{item.status}</Pill>, dateLabel(item.createdAt)] }))} empty="Your applications will appear here." /></section>
                 <aside className="side-stack"><article className="progress-card"><div className="progress-heading"><div><span>Profile strength</span><strong>{payload.summary.profileStrength}%</strong></div></div><div className="progress-track"><span style={{ width: `${payload.summary.profileStrength}%` }} /></div><p>A complete profile helps organizations understand what you bring.</p><button type="button" onClick={() => goTo('My Profile')}>Update profile <ArrowRight size={13} /></button></article><article className="spotlight-card"><h3>Recommended jobs</h3>{payload.recommendedJobs?.length ? payload.recommendedJobs.slice(0, 3).map((job) => <button type="button" className="recommended-job" key={job._id} onClick={() => navigate(`/jobs/${job._id}`)}><strong>{job.title}</strong><span>{job.company?.name} · {job.location}</span></button>) : <p>Add skills to your profile to get more relevant recommendations.</p>}</article></aside>
               </div>}
@@ -2100,7 +2347,7 @@ function DashboardWorkspace({ role }) {
           )}
 
           {!loading && !error && isCandidate && activePage === 'Find Jobs' && <JobSearch onOpen={(id) => navigate(`/jobs/${id}`)} onSaved={(id) => mutate(() => saveJob(id))} />}
-          {!loading && !error && isCandidate && activePage === 'Company Life' && <CompanyLifeFeed posts={viewData?.items || []} onConfirm={requestConfirmation} />}
+          {!loading && !error && isCandidate && activePage === 'Organization Clips' && <CompanyLifeFeed posts={viewData?.items || []} onConfirm={requestConfirmation} />}
           {!loading && !error && isRecruiter && activePage === 'Post a Job' && <JobPostForm onCreated={(job) => {
             goTo('Manage Jobs')
             setJobPostMessage(job.status === 'pending_review'
@@ -2166,6 +2413,71 @@ function DashboardWorkspace({ role }) {
               setToast(null)
             }}>×</button>
           </div>}
+        </div>,
+        document.body,
+      )}
+      {selectedNotification && createPortal(
+        <div className="interview-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !notificationActionsBusy) setSelectedNotification(null)
+        }}>
+          <section className="interview-modal notification-detail-modal" role="dialog" aria-modal="true" aria-labelledby="notification-detail-title">
+            <header className="notification-detail-header">
+              <div>
+                <span className="notification-detail-label">Notification details</span>
+                <h2 id="notification-detail-title">{selectedNotification.title}</h2>
+              </div>
+              <button type="button" className="notification-detail-close" aria-label="Close notification details" onClick={() => setSelectedNotification(null)} disabled={notificationActionsBusy}><X size={18} /></button>
+            </header>
+            <div className="notification-detail-meta">
+              <time dateTime={selectedNotification.createdAt}>{dateLabel(selectedNotification.createdAt, organizationTimeZone)}</time>
+              <span>{selectedNotification.readAt ? 'Read' : 'Unread'}</span>
+            </div>
+            <p className="notification-detail-message">{selectedNotification.message}</p>
+            {actionError && <p className="auth-error" role="alert">{actionError}</p>}
+            <div className="notification-detail-actions">
+              {getNotificationDestination(selectedNotification) && <button type="button" className="subtle-button" onClick={() => openNotificationDestination(selectedNotification)}>
+                {getNotificationDestination(selectedNotification).label}
+              </button>}
+              {!selectedNotification.readAt && <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => runSelectedNotificationAction(
+                () => api(`/${isCandidate ? 'candidate' : isRecruiter ? 'recruiter' : 'admin'}/notifications/${selectedNotification._id}/read`, { method: 'PATCH' }),
+                { markRead: true },
+              )}>{notificationActionsBusy ? 'Updating…' : 'Mark as read'}</button>}
+              {isCandidate && (showArchivedNotifications
+                ? <button type="button" className="org-action-button" disabled={notificationActionsBusy} onClick={() => runSelectedNotificationAction(
+                  () => api(`/candidate/notifications/${selectedNotification._id}/archive`, { method: 'PATCH', body: { archived: false } }),
+                  { close: true },
+                )}>Restore</button>
+                : <FuseButton
+                  className="archive-fuse-button"
+                  label="Archive"
+                  doneLabel="Archived"
+                  undoLabel="Undo"
+                  color="var(--aurora-secondary-text)"
+                  background="var(--aurora-elevated)"
+                  fuseColor="var(--aurora-secondary)"
+                  size="md"
+                  radius={22}
+                  undoWindow={4000}
+                  fuse="outline"
+                  commitOn="press"
+                  settle="reset"
+                  disabled={notificationActionsBusy}
+                  onCommit={() => updateCandidateNotificationArchive(selectedNotification._id, true)}
+                  onUndo={() => updateCandidateNotificationArchive(selectedNotification._id, false)}
+                  onFuseEnd={() => {
+                    setSelectedNotification(null)
+                    reloadAfterArchive(`candidate-notification-${selectedNotification._id}`)
+                  }}
+                />)}
+              {(isCandidate || isRecruiter) && <button type="button" className="org-action-button org-remove-button" disabled={notificationActionsBusy} onClick={() => requestConfirmation(
+                'Permanently delete this notification? This cannot be undone.',
+                () => runSelectedNotificationAction(
+                  () => api(`/${isCandidate ? 'candidate' : 'recruiter'}/notifications/${selectedNotification._id}`, { method: 'DELETE' }),
+                  { close: true },
+                ),
+              )}>Delete</button>}
+            </div>
+          </section>
         </div>,
         document.body,
       )}
@@ -2285,7 +2597,7 @@ function CompanyLifeFeed({ posts, onConfirm }) {
   }
 
   async function sharePost(postId) {
-    const link = `${window.location.origin}${paths.candidate}/company-life#post-${postId}`
+    const link = `${window.location.origin}${paths.candidate}/organization-clips#post-${postId}`
     try {
       await navigator.clipboard.writeText(link)
       setShareMessage('Post link copied to clipboard.')
@@ -2294,9 +2606,9 @@ function CompanyLifeFeed({ posts, onConfirm }) {
     }
   }
 
-  if (!posts.length) return <section className="company-life-empty"><Camera size={28} /><h2>Company life, straight from the team</h2><p>Verified organizations’ photos, clips, and stories will appear here.</p></section>
+  if (!posts.length) return <section className="company-life-empty"><Camera size={28} /><h2>Organization clips, straight from the team</h2><p>Verified organizations’ photos, clips, and stories will appear here.</p></section>
 
-  return <section className="company-life-feed" aria-label="Company life posts">
+  return <section className="company-life-feed" aria-label="Organization clips">
     {shareMessage && <p className="integration-notice" role="status">{shareMessage}</p>}
     {posts.map((post) => {
       const comments = commentsByPost[post._id]
@@ -2428,7 +2740,7 @@ function OrganizationPostsManager({ posts, company, onSaved, onConfirm }) {
   }
 
   return <section className="organization-posts">
-    <header className="organization-posts-heading"><div><h2>Show candidates what life is like at your company</h2><p>Share team celebrations, workplace moments, and stories from your organization.</p></div><span className="organization-posts-badge"><Clapperboard size={16} /> Company life</span></header>
+    <header className="organization-posts-heading"><div><h2>Show candidates what life is like at your company</h2><p>Share team celebrations, workplace moments, and stories from your organization.</p></div><span className="organization-posts-badge"><Clapperboard size={16} /> Organization clips</span></header>
     {!isVerified && <p className="integration-notice">Your organization must be verified before you can publish posts and clips.</p>}
     <form className="organization-post-composer" onSubmit={publishPost}>
       <label htmlFor="organization-post-caption">Write a company update</label>
